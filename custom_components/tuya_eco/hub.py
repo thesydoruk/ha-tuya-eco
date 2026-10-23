@@ -11,7 +11,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 
@@ -126,10 +126,44 @@ class EcoHub:
         for info in sorted(self.cloud_devices.values(), key=lambda i: bool(i.gateway_id)):
             self._ensure_device(info)
         await asyncio.gather(*(d.async_start() for d in self.devices.values()))
+        self._async_purge_stale_entities()
 
         hours = float(self.entry.options.get(OPT_CLOUD_REFRESH_HOURS, DEFAULT_CLOUD_REFRESH_HOURS))
         if hours > 0:
             self._unsub_timer = async_track_time_interval(self.hass, self._scheduled_refresh, timedelta(hours=hours))
+
+    @callback
+    def _async_purge_stale_entities(self) -> int:
+        """Remove registry entries of this entry whose unique_id is no longer generated.
+
+        Keys change when a DP disappears from the schema, when a schema-less device
+        finally gets its real codes, or when a newer version renames a key; without
+        this, such entities would linger as "unavailable" forever. Devices whose
+        entity set is not known yet (no schema, never connected) are left alone, and
+        so are disabled devices.
+        """
+        registry = er.async_get(self.hass)
+        expected: dict[str, set[str]] = {}
+        for device in self.devices.values():
+            defs = self.entity_defs(device)
+            if defs:
+                expected[device.id] = {f"{device.id}_{d.key}" for d in defs}
+        known_ids = set(self.cloud_devices) | self.disabled_devices
+        removed = 0
+        for reg_entry in er.async_entries_for_config_entry(registry, self.entry.entry_id):
+            uid = str(reg_entry.unique_id)
+            owner = next((dev_id for dev_id in known_ids if uid.startswith(f"{dev_id}_")), None)
+            if owner is None:
+                stale = True  # device is not in the account any more
+            elif owner in expected:
+                stale = uid not in expected[owner]
+            else:
+                stale = False  # entity set unknown yet, keep
+            if stale:
+                _LOGGER.info("%s: removing stale entity %s (%s)", self.entry.title, reg_entry.entity_id, uid)
+                registry.async_remove(reg_entry.entity_id)
+                removed += 1
+        return removed
 
     async def async_unload(self) -> None:
         """Stop everything."""

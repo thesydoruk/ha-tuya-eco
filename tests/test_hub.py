@@ -124,3 +124,41 @@ async def test_number_entity_state_does_not_recurse(hass: HomeAssistant) -> None
     assert entity.value == 120  # NumberEntity's property must still work
     assert entity.state == 120
     repr(entity)  # must not recurse
+
+
+async def test_stale_entities_are_purged_on_setup(hass: HomeAssistant) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    from custom_components.tuya_eco.const import CONF_DEVICES_CACHE
+    from custom_components.tuya_eco.providers.base import DpSpec, DpType
+
+    entry = _entry()
+    # Device A has a known schema (one switch); device B has none yet.
+    cached = CloudDevice(
+        id=DEV_A,
+        name="Plug A",
+        local_key="0123456789abcdef",
+        category="cz",
+        dp_schema={1: DpSpec(1, "switch_1", DpType.BOOLEAN)},
+    )
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_DEVICES_CACHE: [cached.as_dict()]})
+    registry = er.async_get(hass)
+    stale_a = registry.async_get_or_create("sensor", DOMAIN, f"{DEV_A}_old_thing", config_entry=entry)
+    keep_a = registry.async_get_or_create("switch", DOMAIN, f"{DEV_A}_switch_1", config_entry=entry)
+    keep_b = registry.async_get_or_create("switch", DOMAIN, f"{DEV_B}_whatever", config_entry=entry)
+    orphan = registry.async_get_or_create("switch", DOMAIN, "bf0000000000000000zz9_switch_1", config_entry=entry)
+
+    with (
+        patch("custom_components.tuya_eco.local.discovery.TuyaDiscovery._async_start", AsyncMock()),
+        patch("custom_components.tuya_eco.local.discovery.TuyaDiscovery._async_stop", AsyncMock()),
+        patch("custom_components.tuya_eco.local.device.EcoDevice.async_start", AsyncMock()),
+        patch("custom_components.tuya_eco.local.device.EcoDevice.async_stop", AsyncMock()),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert registry.async_get(stale_a.entity_id) is None  # key no longer generated
+    assert registry.async_get(orphan.entity_id) is None  # device not in the account
+    assert registry.async_get(keep_a.entity_id) is not None  # still generated
+    assert registry.async_get(keep_b.entity_id) is not None  # device without schema: untouched
