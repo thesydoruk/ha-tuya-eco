@@ -73,7 +73,7 @@
         },
         "dps": {
           "name": "Data points",
-          "description": "Mapping of DP id to value, e.g. {\"1\": true}."
+          "description": "Mapping of DP id to value, for example dp 1 to true."
         }
       }
     },
