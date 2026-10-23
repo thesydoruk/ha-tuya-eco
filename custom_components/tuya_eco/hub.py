@@ -29,6 +29,7 @@ from .const import (
     OPT_CLOUD_FALLBACK,
     OPT_CLOUD_REFRESH_HOURS,
     OPT_DISABLED_DEVICES,
+    OPT_HOMES,
     OPT_POLL_INTERVAL,
     SIGNAL_NEW_DEVICES,
 )
@@ -62,6 +63,7 @@ class EcoHub:
         self.provider: BaseProvider = get_provider_class(entry.data[CONF_PROVIDER]).from_entry_data(
             hass, entry.data[CONF_PROVIDER_DATA]
         )
+        self.provider.selected_homes = self.selected_homes
         self.discovery = get_discovery(hass)
         self.devices: dict[str, EcoDevice] = {}
         self.cloud_devices: dict[str, CloudDevice] = {}
@@ -85,6 +87,12 @@ class EcoHub:
     def cloud_fallback(self) -> bool:
         """Send commands through the cloud when the LAN link is down."""
         return bool(self.entry.options.get(OPT_CLOUD_FALLBACK, DEFAULT_CLOUD_FALLBACK))
+
+    @property
+    def selected_homes(self) -> set[str] | None:
+        """Home ids to include (``None`` = all)."""
+        homes = self.entry.options.get(OPT_HOMES)
+        return {str(h) for h in homes} if homes else None
 
     @property
     def disabled_devices(self) -> set[str]:
@@ -231,6 +239,7 @@ class EcoHub:
         async with self._refresh_lock:
             if not force and time.monotonic() - self._last_cloud_refresh < KEY_REFRESH_COOLDOWN:
                 return False
+            self.provider.selected_homes = self.selected_homes
             try:
                 devices = await self.provider.async_fetch_devices()
             except ProviderAuthError as err:

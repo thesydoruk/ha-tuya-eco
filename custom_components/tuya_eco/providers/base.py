@@ -150,6 +150,14 @@ class CloudDevice:
         )
 
 
+@dataclass(slots=True)
+class Home:
+    """A home / location of the account."""
+
+    id: str
+    name: str
+
+
 class LoginKind(StrEnum):
     """How the user authenticates with a provider."""
 
@@ -188,10 +196,22 @@ class BaseProvider(ABC):
     # Fields the config flow must ask for before `async_start_login` (voluptuous keys
     # are built by the flow from this list; values: "text", "password", "select:<opts>").
     login_fields: dict[str, str] = {}
+    # Whether the account is organised in homes the user may pick from.
+    supports_homes: bool = False
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialise the provider."""
         self.hass = hass
+        # Home ids to include; ``None`` means every home of the account.
+        self.selected_homes: set[str] | None = None
+
+    async def async_list_homes(self) -> list[Home]:
+        """Homes of the account (empty when the provider has no such notion)."""
+        return []
+
+    def home_selected(self, home_id: str) -> bool:
+        """Whether devices of `home_id` should be included."""
+        return self.selected_homes is None or str(home_id) in self.selected_homes
 
     @abstractmethod
     async def async_start_login(self, user_input: dict[str, Any]) -> LoginStep:

@@ -37,6 +37,7 @@ OPT_POLL_INTERVAL = "poll_interval"
 OPT_CLOUD_REFRESH_HOURS = "cloud_refresh_hours"
 OPT_CLOUD_FALLBACK = "cloud_fallback"
 OPT_DISABLED_DEVICES = "disabled_devices"
+OPT_HOMES = "homes"  # list of home ids; missing/empty = all homes
 
 DEFAULT_POLL_INTERVAL = 30
 DEFAULT_CLOUD_REFRESH_HOURS = 12

@@ -31,6 +31,7 @@ from .base import (
     CloudDevice,
     DpSpec,
     DpType,
+    Home,
     LoginKind,
     LoginStep,
     ProviderAuthError,
@@ -421,6 +422,7 @@ class TuyaOemProvider(BaseProvider):
     key = "tuya_oem"
     name = "Other Tuya OEM app (app id + secret)"
     login_kind = LoginKind.CREDENTIALS
+    supports_homes = True
     profile: OemAppProfile | None = None  # fixed profile in subclasses
     login_fields = {
         CONF_EMAIL: "text",
@@ -540,7 +542,7 @@ class TuyaOemProvider(BaseProvider):
         devices: list[CloudDevice] = []
         for group in await api.groups():
             gid = group.get("groupId")
-            if gid is None:
+            if gid is None or not self.home_selected(str(gid)):
                 continue
             for raw in await api.devices(str(gid)):
                 try:
@@ -550,6 +552,17 @@ class TuyaOemProvider(BaseProvider):
         self._cache = devices
         self._last_fetch = now
         return list(devices)
+
+    async def async_list_homes(self) -> list[Home]:
+        """Homes ("locations") of the account."""
+        api = self._get_api()
+        if not api.sid:
+            await api.login()
+        return [
+            Home(id=str(g["groupId"]), name=str(g.get("name") or g["groupId"]))
+            for g in await api.groups()
+            if g.get("groupId") is not None
+        ]
 
     async def async_send_cloud_command(self, device_id: str, commands: list[dict[str, Any]]) -> bool:
         """Cloud fallback: needs dp ids, so map codes through the cache."""

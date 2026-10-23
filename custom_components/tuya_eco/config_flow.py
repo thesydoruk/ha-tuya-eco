@@ -21,10 +21,12 @@ from .const import (
     DOMAIN,
     OPT_CLOUD_FALLBACK,
     OPT_CLOUD_REFRESH_HOURS,
+    OPT_HOMES,
     OPT_POLL_INTERVAL,
 )
 from .providers.base import (
     BaseProvider,
+    Home,
     LoginKind,
     LoginStep,
     ProviderAuthError,
@@ -61,6 +63,23 @@ def _login_schema(provider: type[BaseProvider]) -> vol.Schema:
     return vol.Schema(fields)
 
 
+def _homes_schema(homes: list[Home], current: list[str] | None) -> vol.Schema:
+    """Multi-select of homes; everything selected by default."""
+    ids = [h.id for h in homes]
+    default = [h for h in (current or ids) if h in ids] or ids
+    return vol.Schema(
+        {
+            vol.Required(OPT_HOMES, default=default): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[selector.SelectOptionDict(value=h.id, label=h.name) for h in homes],
+                    multiple=True,
+                    mode=selector.SelectSelectorMode.LIST,
+                )
+            )
+        }
+    )
+
+
 class TuyaEcoConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the config flow."""
 
@@ -72,6 +91,7 @@ class TuyaEcoConfigFlow(ConfigFlow, domain=DOMAIN):
         self._provider: BaseProvider | None = None
         self._login_step: LoginStep | None = None
         self._reauth_entry: ConfigEntry | None = None
+        self._homes: list[Home] = []
 
     @staticmethod
     @callback
@@ -161,6 +181,25 @@ class TuyaEcoConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _async_finish(self) -> ConfigFlowResult:
         assert self._provider is not None
+        if self._reauth_entry is None and self._provider.supports_homes:
+            try:
+                self._homes = await self._provider.async_list_homes()
+            except ProviderError as err:
+                _LOGGER.debug("cannot list homes: %s", err)
+                self._homes = []
+            if len(self._homes) > 1:
+                return await self.async_step_homes()
+        return await self._async_create(None)
+
+    async def async_step_homes(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Pick the homes whose devices should be imported."""
+        if user_input is not None:
+            chosen = [str(h) for h in user_input.get(OPT_HOMES, [])]
+            return await self._async_create(chosen or None)
+        return self.async_show_form(step_id="homes", data_schema=_homes_schema(self._homes, None))
+
+    async def _async_create(self, homes: list[str] | None) -> ConfigFlowResult:
+        assert self._provider is not None
         data = {
             CONF_PROVIDER: self._provider.key,
             CONF_PROVIDER_DATA: self._provider.to_entry_data(),
@@ -173,7 +212,8 @@ class TuyaEcoConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_update_reload_and_abort(self._reauth_entry, data={**self._reauth_entry.data, **data})
         await self.async_set_unique_id(self._provider.account_id)
         self._abort_if_unique_id_configured()
-        return self.async_create_entry(title=title, data=data)
+        options = {OPT_HOMES: homes} if homes else {}
+        return self.async_create_entry(title=title, data=data, options=options)
 
     # ------------------------------------------------------------------ reauth
 
@@ -200,10 +240,24 @@ class TuyaEcoOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Edit options."""
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            data = dict(user_input)
+            if OPT_HOMES in data:
+                data[OPT_HOMES] = [str(h) for h in data[OPT_HOMES]]
+            return self.async_create_entry(data=data)
         options = self.config_entry.options
+        homes: list[Home] = []
+        hub = getattr(self.config_entry, "runtime_data", None)
+        if hub is not None and hub.provider.supports_homes:
+            try:
+                homes = await hub.provider.async_list_homes()
+            except ProviderError as err:
+                _LOGGER.debug("cannot list homes for options: %s", err)
+        fields: dict[Any, Any] = {}
+        if homes:
+            fields.update(_homes_schema(homes, options.get(OPT_HOMES)).schema)
         schema = vol.Schema(
             {
+                **fields,
                 vol.Required(
                     OPT_POLL_INTERVAL, default=options.get(OPT_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
                 ): selector.NumberSelector(

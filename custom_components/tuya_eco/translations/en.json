@@ -37,6 +37,13 @@
       "reauth_confirm": {
         "title": "Re-authenticate {provider}",
         "description": "The cloud session expired. Sign in again to refresh the local keys."
+      },
+      "homes": {
+        "title": "Choose homes",
+        "description": "Devices of the selected homes are imported; the rest are ignored. You can change this later in the integration options.",
+        "data": {
+          "homes": "Homes"
+        }
       }
     },
     "error": {
@@ -57,7 +64,8 @@
         "data": {
           "poll_interval": "Full poll interval",
           "cloud_refresh_hours": "Cloud refresh interval (0 = only when a key fails)",
-          "cloud_fallback": "Send commands through the cloud when the device is unreachable on the LAN"
+          "cloud_fallback": "Send commands through the cloud when the device is unreachable on the LAN",
+          "homes": "Homes"
         }
       }
     }

@@ -19,6 +19,7 @@ from .base import (
     CloudDevice,
     DpSpec,
     DpType,
+    Home,
     LoginKind,
     LoginStep,
     ProviderAuthError,
@@ -79,6 +80,7 @@ class SmartLifeProvider(BaseProvider):
     name = "Smart Life / Tuya Smart (QR code)"
     login_kind = LoginKind.QR_CODE
     login_fields = {CONF_USER_CODE: "text"}
+    supports_homes = True
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialise."""
@@ -200,7 +202,15 @@ class SmartLifeProvider(BaseProvider):
 
         manager = self._get_manager()
         try:
-            manager.update_device_cache()
+            homes = manager.home_repository.query_homes()
+            manager.user_homes = homes
+            manager.device_map.clear()
+            for home in homes:
+                if not self.home_selected(home.id):
+                    continue
+                for device in manager.device_repository.query_devices_by_home(home.id):
+                    device.home_id = home.id
+                    manager.device_map[device.id] = device
         except requests.RequestException as err:
             raise ProviderError(f"cloud unreachable: {err}") from err
         except Exception as err:  # noqa: BLE001 - SDK raises plain Exception
@@ -279,8 +289,23 @@ class SmartLifeProvider(BaseProvider):
         )
 
     async def async_fetch_devices(self) -> list[CloudDevice]:
-        """Return all devices with local keys."""
+        """Return the devices of the selected homes with local keys."""
         return await self.hass.async_add_executor_job(self._fetch_devices_sync)
+
+    def _list_homes_sync(self) -> list[Home]:
+        import requests  # noqa: PLC0415
+
+        try:
+            homes = self._get_manager().home_repository.query_homes()
+        except requests.RequestException as err:
+            raise ProviderError(f"cloud unreachable: {err}") from err
+        except Exception as err:  # noqa: BLE001
+            raise ProviderError(str(err)) from err
+        return [Home(id=str(h.id), name=str(h.name)) for h in homes]
+
+    async def async_list_homes(self) -> list[Home]:
+        """Homes of the account."""
+        return await self.hass.async_add_executor_job(self._list_homes_sync)
 
     async def async_send_cloud_command(self, device_id: str, commands: list[dict[str, Any]]) -> bool:
         """Cloud fallback."""
