@@ -284,6 +284,11 @@ SENSORS: dict[str, SensorRule] = {
     "device_state1": SensorRule(SensorDeviceClass.ENUM, None, entity_category=_DIAG),
     "device_state2": SensorRule(SensorDeviceClass.ENUM, None, entity_category=_DIAG),
     "signal_strength": SensorRule(SensorDeviceClass.SIGNAL_STRENGTH, _M, "dBm", _DIAG),
+    # factory calibration coefficients of energy plugs: keep them, but out of the way
+    "voltage_coe": SensorRule(None, None, entity_category=_DIAG, enabled_default=False),
+    "electric_coe": SensorRule(None, None, entity_category=_DIAG, enabled_default=False),
+    "power_coe": SensorRule(None, None, entity_category=_DIAG, enabled_default=False),
+    "electricity_coe": SensorRule(None, None, entity_category=_DIAG, enabled_default=False),
 }
 
 _ALARM = ("1", "alarm")
@@ -349,6 +354,7 @@ SWITCHES: dict[str, SwitchRule] = {
     "fan_cool": SwitchRule(None, _CFG, "mdi:snowflake"),
     "fan_beep": SwitchRule(None, _CFG, "mdi:volume-high"),
     "filter_reset": SwitchRule(None, _CFG, "mdi:air-filter"),
+    "overcharge_switch": SwitchRule(None, _CFG, "mdi:battery-charging-high", "Overcharge protection"),
     "pump_reset": SwitchRule(None, _CFG, "mdi:water-pump"),
     "water_reset": SwitchRule(None, _CFG, "mdi:water-sync"),
     "switch_spray": SwitchRule(None, icon="mdi:spray"),

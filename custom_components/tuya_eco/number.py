@@ -42,7 +42,7 @@ class EcoNumber(EcoEntity, NumberEntity):
     @property
     def native_value(self) -> float | None:
         """Value."""
-        return self._type.scale_value(self.value("value"))
+        return self._type.scale_value(self.dp_value("value"))
 
     async def async_set_native_value(self, value: float) -> None:
         """Write."""

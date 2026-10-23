@@ -90,7 +90,7 @@ class EcoCover(EcoEntity, CoverEntity):
     @property
     def _inverted(self) -> bool:
         if "back_mode" in self.definition.dps:
-            return self.value("back_mode") != "back"
+            return self.dp_value("back_mode") != "back"
         return bool(self.definition.meta.get("invert", True))
 
     def _to_ha(self, kind: IntegerType, raw: Any) -> int | None:
@@ -110,9 +110,9 @@ class EcoCover(EcoEntity, CoverEntity):
     def current_cover_position(self) -> int | None:
         """0 closed … 100 open."""
         if self._pos_state is not None:
-            return self._to_ha(self._pos_state, self.value("position_state"))
+            return self._to_ha(self._pos_state, self.dp_value("position_state"))
         if self._pos is not None:
-            return self._to_ha(self._pos, self.value("position"))
+            return self._to_ha(self._pos, self.dp_value("position"))
         return None
 
     @property
@@ -120,18 +120,18 @@ class EcoCover(EcoEntity, CoverEntity):
         """Tilt."""
         if self._tilt is None:
             return None
-        return self._to_ha(self._tilt, self.value("tilt"))
+        return self._to_ha(self._tilt, self.dp_value("tilt"))
 
     @property
     def is_closed(self) -> bool | None:
         """Closed."""
         if self._garage:
-            contact = self.value("contact")
+            contact = self.dp_value("contact")
             return None if contact is None else not bool(contact)
         pos = self.current_cover_position
         if pos is not None:
             return pos == 0
-        state = self.value("state")
+        state = self.dp_value("state")
         if state is not None:
             text = str(state).lower()
             if text in _CLOSED_STATES:
@@ -139,7 +139,7 @@ class EcoCover(EcoEntity, CoverEntity):
             if text in _OPEN_STATES:
                 return False
         if self._bool_control:
-            value = self.value("switch")
+            value = self.dp_value("switch")
             return None if value is None else not bool(value)
         return None
 

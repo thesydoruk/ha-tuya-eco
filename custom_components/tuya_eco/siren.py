@@ -27,7 +27,7 @@ class EcoSiren(EcoEntity, SirenEntity):
     @property
     def is_on(self) -> bool | None:
         """State."""
-        value = self.value("switch")
+        value = self.dp_value("switch")
         return None if value is None else bool(value)
 
     async def async_turn_on(self, **kwargs: Any) -> None:

@@ -44,7 +44,7 @@ class EcoHumidifier(EcoEntity, HumidifierEntity):
     @property
     def is_on(self) -> bool | None:
         """On."""
-        value = self.value("switch")
+        value = self.dp_value("switch")
         return None if value is None else bool(value)
 
     @property
@@ -52,19 +52,19 @@ class EcoHumidifier(EcoEntity, HumidifierEntity):
         """Measured humidity."""
         if self._current is None:
             return None
-        return self._current.scale_value(self.value("current"))
+        return self._current.scale_value(self.dp_value("current"))
 
     @property
     def target_humidity(self) -> float | None:
         """Target humidity."""
         if self._target is None:
             return None
-        return self._target.scale_value(self.value("target"))
+        return self._target.scale_value(self.dp_value("target"))
 
     @property
     def mode(self) -> str | None:
         """Mode."""
-        value = self.value("mode")
+        value = self.dp_value("mode")
         return None if value is None else str(value)
 
     async def async_set_humidity(self, humidity: int) -> None:

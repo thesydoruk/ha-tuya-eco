@@ -25,7 +25,7 @@ class EcoBinarySensor(EcoEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         """State."""
-        value = self.value("state")
+        value = self.dp_value("state")
         if value is None:
             return None
         if isinstance(value, bool):

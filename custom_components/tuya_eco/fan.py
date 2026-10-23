@@ -52,13 +52,13 @@ class EcoFan(EcoEntity, FanEntity):
         if "switch" not in self.definition.dps:
             pct = self.percentage
             return None if pct is None else pct > 0
-        value = self.value("switch")
+        value = self.dp_value("switch")
         return None if value is None else bool(value)
 
     @property
     def percentage(self) -> int | None:
         """Speed."""
-        raw = self.value("speed")
+        raw = self.dp_value("speed")
         if raw is None:
             return None
         if self._speed_options:
@@ -73,7 +73,7 @@ class EcoFan(EcoEntity, FanEntity):
     @property
     def current_direction(self) -> str | None:
         """Direction."""
-        value = self.value("direction")
+        value = self.dp_value("direction")
         if value is None:
             return None
         return DIRECTION_REVERSE if str(value).lower() in ("reverse", "backward", "back") else DIRECTION_FORWARD
@@ -81,13 +81,13 @@ class EcoFan(EcoEntity, FanEntity):
     @property
     def oscillating(self) -> bool | None:
         """Oscillation."""
-        value = self.value("oscillate")
+        value = self.dp_value("oscillate")
         return None if value is None else bool(value)
 
     @property
     def preset_mode(self) -> str | None:
         """Preset."""
-        value = self.value("preset")
+        value = self.dp_value("preset")
         return None if value is None else str(value)
 
     async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs: Any) -> None:

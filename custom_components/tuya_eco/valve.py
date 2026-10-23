@@ -29,7 +29,7 @@ class EcoValve(EcoEntity, ValveEntity):
     @property
     def is_closed(self) -> bool | None:
         """Closed."""
-        value = self.value("switch")
+        value = self.dp_value("switch")
         return None if value is None else not bool(value)
 
     async def async_open_valve(self, **kwargs: Any) -> None:

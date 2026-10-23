@@ -43,7 +43,7 @@ class EcoSensor(EcoEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Value."""
-        value = self.value("value")
+        value = self.dp_value("value")
         if value is None:
             return None
         if self._kind == "Integer":

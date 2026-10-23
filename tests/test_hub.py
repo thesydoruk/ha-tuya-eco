@@ -100,3 +100,27 @@ async def test_remove_device_from_ui(hass: HomeAssistant) -> None:
     with patch("custom_components.tuya_eco.local.device.EcoDevice.async_stop", AsyncMock()):
         assert await async_remove_config_entry_device(hass, entry, reg_entry)
     assert DEV_B not in hub.devices
+
+
+async def test_number_entity_state_does_not_recurse(hass: HomeAssistant) -> None:
+    """Regression: EcoEntity.value() shadowed NumberEntity.value and HA recursed in __repr__."""
+    from homeassistant.const import Platform
+
+    from custom_components.tuya_eco.mapping import EntityDef
+    from custom_components.tuya_eco.number import EcoNumber
+
+    entry = _entry()
+    await _setup(hass, entry)
+    hub = entry.runtime_data
+    device = hub.devices[DEV_A]
+    device.dps["9"] = 120
+    definition = EntityDef(
+        Platform.NUMBER, "countdown_1", {"value": 9}, meta={"min": 0, "max": 86400, "scale": 0, "step": 1}
+    )
+    entity = EcoNumber(hub, device, definition)
+    entity.hass = hass
+    entity.entity_id = "number.test_countdown"
+    assert entity.native_value == 120
+    assert entity.value == 120  # NumberEntity's property must still work
+    assert entity.state == 120
+    repr(entity)  # must not recurse

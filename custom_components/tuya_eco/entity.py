@@ -73,7 +73,7 @@ class EcoEntity(Entity):
         """DP id for a role."""
         return self.definition.dps.get(role)
 
-    def value(self, role: str) -> Any:
+    def dp_value(self, role: str) -> Any:
         """Current value of the DP bound to `role`."""
         dp_id = self.dp(role)
         return None if dp_id is None else self.device.get_dp(dp_id)

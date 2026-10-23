@@ -101,24 +101,24 @@ class EcoClimate(EcoEntity, ClimateEntity):
         """Current."""
         if self._cur is None:
             return None
-        return self._cur.scale_value(self.value("temp_current"))
+        return self._cur.scale_value(self.dp_value("temp_current"))
 
     @property
     def target_temperature(self) -> float | None:
         """Target."""
-        return self._set.scale_value(self.value("temp_set"))
+        return self._set.scale_value(self.dp_value("temp_set"))
 
     @property
     def hvac_mode(self) -> HVACMode | None:
         """Mode."""
         if "switch" in self.definition.dps:
-            sw = self.value("switch")
+            sw = self.dp_value("switch")
             if sw is None:
                 return None
             if not sw:
                 return HVACMode.OFF
         if self._mode_map:
-            raw = self.value("mode")
+            raw = self.dp_value("mode")
             hvac = self._mode_map.get(str(raw)) if raw is not None else None
             if hvac:
                 try:
@@ -149,21 +149,21 @@ class EcoClimate(EcoEntity, ClimateEntity):
     @property
     def current_humidity(self) -> float | None:
         """Measured humidity."""
-        return self._humidity_cur.scale_value(self.value("humidity")) if self._humidity_cur else None
+        return self._humidity_cur.scale_value(self.dp_value("humidity")) if self._humidity_cur else None
 
     @property
     def target_humidity(self) -> float | None:
         """Target humidity."""
-        return self._humidity_set.scale_value(self.value("humidity_set")) if self._humidity_set else None
+        return self._humidity_set.scale_value(self.dp_value("humidity_set")) if self._humidity_set else None
 
     @property
     def swing_mode(self) -> str | None:
         """Swing."""
         if "swing" in self.definition.dps:
-            value = self.value("swing")
+            value = self.dp_value("swing")
             return None if value is None else ("on" if value else "off")
-        h = bool(self.value("swing_h")) if "swing_h" in self.definition.dps else False
-        v = bool(self.value("swing_v")) if "swing_v" in self.definition.dps else False
+        h = bool(self.dp_value("swing_h")) if "swing_h" in self.definition.dps else False
+        v = bool(self.dp_value("swing_v")) if "swing_v" in self.definition.dps else False
         if h and v:
             return "both"
         if h:
@@ -193,13 +193,13 @@ class EcoClimate(EcoEntity, ClimateEntity):
     @property
     def fan_mode(self) -> str | None:
         """Fan."""
-        value = self.value("fan")
+        value = self.dp_value("fan")
         return None if value is None else str(value)
 
     @property
     def preset_mode(self) -> str | None:
         """Preset."""
-        value = self.value("preset")
+        value = self.dp_value("preset")
         return None if value is None else str(value)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:

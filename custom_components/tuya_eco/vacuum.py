@@ -74,19 +74,19 @@ class EcoVacuum(EcoEntity, StateVacuumEntity):
     @property
     def activity(self) -> VacuumActivity | None:
         """Activity."""
-        status = self.value("status")
+        status = self.dp_value("status")
         if status is not None and str(status) in _STATUS_TO_ACTIVITY:
             return _STATUS_TO_ACTIVITY[str(status)]
-        if self.value("pause") is True:
+        if self.dp_value("pause") is True:
             return VacuumActivity.PAUSED
-        if status is None and self.value("power_go") is True:
+        if status is None and self.dp_value("power_go") is True:
             return VacuumActivity.CLEANING
         return None if status is None else VacuumActivity.IDLE
 
     @property
     def fan_speed(self) -> str | None:
         """Suction."""
-        value = self.value("fan_speed")
+        value = self.dp_value("fan_speed")
         return None if value is None else str(value)
 
     async def async_start(self) -> None:

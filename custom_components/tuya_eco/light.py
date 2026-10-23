@@ -10,10 +10,12 @@ from typing import Any
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP_KELVIN,
+    ATTR_EFFECT,
     ATTR_HS_COLOR,
     ATTR_WHITE,
     ColorMode,
     LightEntity,
+    LightEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -113,18 +115,23 @@ class EcoLight(EcoEntity, LightEntity):
         if not modes:
             modes.add(ColorMode.BRIGHTNESS if self._bright is not None else ColorMode.ONOFF)
         self._attr_supported_color_modes = modes
+        # Work modes that are neither white nor colour (scene, music, …) are exposed as effects.
+        self._effects = [m for m in self._modes if m not in (MODE_WHITE, MODE_COLOUR)]
+        if self._effects and "mode" in definition.dps:
+            self._attr_supported_features = LightEntityFeature.EFFECT
+            self._attr_effect_list = self._effects
 
     # ------------------------------------------------------------------ state
 
     @property
     def is_on(self) -> bool | None:
         """On/off."""
-        value = self.value("switch")
+        value = self.dp_value("switch")
         return None if value is None else bool(value)
 
     @property
     def _work_mode(self) -> str | None:
-        mode = self.value("mode")
+        mode = self.dp_value("mode")
         return str(mode) if mode is not None else None
 
     @property
@@ -149,21 +156,27 @@ class EcoLight(EcoEntity, LightEntity):
     def brightness(self) -> int | None:
         """0-255."""
         if self.color_mode == ColorMode.HS:
-            hsv = _decode_colour(self.value("color"), self._colour_v2, self._s_max, self._v_max)
+            hsv = _decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
             return None if hsv is None else int(round(hsv[2] * 255))
         if self._bright is None:
             return None
-        raw = self.value("brightness")
+        raw = self.dp_value("brightness")
         if raw is None:
             return None
         return int(round(self._bright.remap_to(float(raw), 0, 255)))
+
+    @property
+    def effect(self) -> str | None:
+        """Current effect (a non white/colour work mode)."""
+        mode = self._work_mode
+        return mode if mode in self._effects else None
 
     @property
     def color_temp_kelvin(self) -> int | None:
         """Colour temperature."""
         if self._temp is None:
             return None
-        raw = self.value("color_temp")
+        raw = self.dp_value("color_temp")
         if raw is None:
             return None
         return int(round(self._temp.remap_to(float(raw), KELVIN_WARM, KELVIN_COLD)))
@@ -171,7 +184,7 @@ class EcoLight(EcoEntity, LightEntity):
     @property
     def hs_color(self) -> tuple[float, float] | None:
         """HS colour."""
-        hsv = _decode_colour(self.value("color"), self._colour_v2, self._s_max, self._v_max)
+        hsv = _decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
         return None if hsv is None else (hsv[0], hsv[1] * 100)
 
     # ------------------------------------------------------------------ commands
@@ -188,9 +201,14 @@ class EcoLight(EcoEntity, LightEntity):
             hs = None
             if mode_dp is not None and MODE_WHITE in self._modes:
                 dps[mode_dp] = MODE_WHITE
+        effect = kwargs.get(ATTR_EFFECT)
+        if effect in self._effects and mode_dp is not None:
+            dps[mode_dp] = effect
+            await self.async_write_dps(dps)
+            return
 
         if hs is not None and "color" in self.definition.dps:
-            current = _decode_colour(self.value("color"), self._colour_v2, self._s_max, self._v_max)
+            current = _decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
             v = (brightness / 255) if brightness is not None else (current[2] if current else 1.0)
             dps[self.dp("color")] = _encode_colour(
                 hs[0], hs[1] / 100, max(0.01, v), self._colour_v2, self._s_max, self._v_max
@@ -205,7 +223,7 @@ class EcoLight(EcoEntity, LightEntity):
                 dps[self.dp("brightness")] = self._bright.remap_from(float(brightness), 0, 255)  # type: ignore[index]
         elif brightness is not None:
             if self.color_mode == ColorMode.HS and "color" in self.definition.dps and ATTR_WHITE not in kwargs:
-                current = _decode_colour(self.value("color"), self._colour_v2, self._s_max, self._v_max) or (
+                current = _decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max) or (
                     0.0,
                     0.0,
                     1.0,

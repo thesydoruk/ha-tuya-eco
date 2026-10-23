@@ -31,7 +31,7 @@ class EcoSelect(EcoEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Current."""
-        value = self.value("value")
+        value = self.dp_value("value")
         if value is None:
             return None
         text = str(value)

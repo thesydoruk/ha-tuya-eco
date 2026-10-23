@@ -53,7 +53,7 @@ class EcoAlarm(EcoEntity, AlarmControlPanelEntity):
         self._attr_supported_features = features
 
     def _message(self) -> str | None:
-        raw = self.value("message")
+        raw = self.dp_value("message")
         if raw is None:
             return None
         try:
@@ -64,17 +64,17 @@ class EcoAlarm(EcoEntity, AlarmControlPanelEntity):
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
         """State."""
-        if self.value("state") == "alarm":
+        if self.dp_value("state") == "alarm":
             msg = self._message() or ""
             if "Sensor Low Battery" not in msg:
                 return AlarmControlPanelState.TRIGGERED
-        mode = self.value("mode")
+        mode = self.dp_value("mode")
         return None if mode is None else _MODE_TO_STATE.get(str(mode))
 
     @property
     def changed_by(self) -> str | None:
         """Last alarm message while alarming."""
-        return self._message() if self.value("state") == "alarm" else None
+        return self._message() if self.dp_value("state") == "alarm" else None
 
     async def _async_set(self, action: str) -> None:
         await self.async_write("mode", _ACTIONS[action])
