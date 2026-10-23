@@ -184,6 +184,22 @@ class LoginStep:
     description_placeholders: dict[str, str] = field(default_factory=dict)
 
 
+class PushListener:
+    """Callbacks for cloud push events (implemented by the hub). All run in the event loop."""
+
+    def push_device_added(self, device_id: str) -> None:
+        """A device was added to the account."""
+
+    def push_device_removed(self, device_id: str) -> None:
+        """A device was removed from the account."""
+
+    def push_device_renamed(self, device_id: str, name: str) -> None:
+        """A device was renamed in the app."""
+
+    def push_device_report(self, device_id: str, values: dict[str, Any]) -> None:
+        """The cloud reported DP values (keyed by code)."""
+
+
 class BaseProvider(ABC):
     """Abstract cloud adapter.
 
@@ -248,6 +264,13 @@ class BaseProvider(ABC):
     async def async_send_cloud_command(self, device_id: str, commands: list[dict[str, Any]]) -> bool:
         """Optional cloud fallback for commands (code/value dicts). Default: unsupported."""
         return False
+
+    async def async_start_push(self, listener: PushListener) -> bool:
+        """Subscribe to cloud push events, if the provider has such a channel. Idempotent."""
+        return False
+
+    async def async_stop_push(self) -> None:
+        """Unsubscribe from cloud push events."""
 
     async def async_close(self) -> None:
         """Release resources."""

@@ -44,7 +44,7 @@ from .local.device import EcoDevice
 from .local.discovery import TuyaDiscovery
 from .mapping import EntityDef, build_entities, synthesize_schema
 from .mapping.profiles import preload_profiles
-from .providers.base import BaseProvider, CloudDevice, ProviderAuthError, ProviderError
+from .providers.base import BaseProvider, CloudDevice, ProviderAuthError, ProviderError, PushListener
 from .providers.registry import get_provider_class
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def get_discovery(hass: HomeAssistant) -> TuyaDiscovery:
     return data["discovery"]
 
 
-class EcoHub:
+class EcoHub(PushListener):
     """Manages all devices of one provider account."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -82,6 +82,7 @@ class EcoHub:
         self._unsub_timer: Any = None
         self._persist_handle: asyncio.TimerHandle | None = None
         self.last_cloud_error: str | None = None
+        self.push_active = False
         # Devices skipped because another tuya_eco entry already controls them: id → that entry's title.
         self.conflicts: dict[str, str] = {}
         # home id → config subentry id (one subentry per home groups devices in the UI)
@@ -140,6 +141,10 @@ class EcoHub:
         await asyncio.gather(*(d.async_start() for d in self.devices.values()))
         self._async_purge_stale_entities()
 
+        self.push_active = await self.provider.async_start_push(self)
+        if self.push_active:
+            _LOGGER.debug("%s: cloud push channel connected", self.entry.title)
+
         hours = float(self.entry.options.get(OPT_CLOUD_REFRESH_HOURS, DEFAULT_CLOUD_REFRESH_HOURS))
         if hours > 0:
             self._unsub_timer = async_track_time_interval(self.hass, self._scheduled_refresh, timedelta(hours=hours))
@@ -185,6 +190,7 @@ class EcoHub:
         if self._persist_handle:
             self._persist_handle.cancel()
             self._persist_now()
+        await self.provider.async_stop_push()
         await asyncio.gather(*(d.async_stop() for d in self.devices.values()), return_exceptions=True)
         self.devices.clear()
         await self.discovery.async_release()
@@ -442,6 +448,51 @@ class EcoHub:
         self._schedule_persist()
         if new_ids:
             async_dispatcher_send(self.hass, f"{SIGNAL_NEW_DEVICES}_{self.entry.entry_id}", new_ids)
+        if (new_ids or gone) and self.push_active:
+            self.hass.async_create_task(self._async_resubscribe_push())
+
+    async def _async_resubscribe_push(self) -> None:
+        self.push_active = await self.provider.async_start_push(self)
+
+    # ------------------------------------------------------------------ cloud push events
+
+    @callback
+    def push_device_added(self, device_id: str) -> None:
+        """New device in the account: fetch it now."""
+        _LOGGER.info("%s: cloud reports a new device %s", self.entry.title, device_id)
+        self.hass.async_create_task(self.async_refresh_cloud(force=True))
+
+    @callback
+    def push_device_removed(self, device_id: str) -> None:
+        """Device deleted in the app."""
+        if device_id in self.cloud_devices:
+            self.hass.async_create_task(self.async_remove_device(device_id))
+
+    @callback
+    def push_device_renamed(self, device_id: str, name: str) -> None:
+        """Device renamed in the app: follow the name."""
+        info = self.cloud_devices.get(device_id)
+        if info is None or not name or info.name == name:
+            return
+        info.name = name
+        registry = dr.async_get(self.hass)
+        reg_entry = self._device_by_identifier(registry, device_id)
+        if reg_entry is not None and reg_entry.name_by_user is None:
+            registry.async_update_device(reg_entry.id, name=name)
+        self._schedule_persist()
+
+    @callback
+    def push_device_report(self, device_id: str, values: dict[str, Any]) -> None:
+        """Cloud state report: used only while the LAN link is down."""
+        device = self.devices.get(device_id)
+        if device is None or device.connected:
+            return
+        by_code = device.info.codes
+        dps = {
+            str(by_code[code].dp_id): value for code, value in values.items() if code in by_code and value is not None
+        }
+        if dps:
+            device.apply_cloud_report(dps)
 
     async def async_remove_device(self, dev_id: str) -> None:
         """Forget a device: stop its link, drop caches, remove it from the device registry."""

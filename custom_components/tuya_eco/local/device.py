@@ -451,6 +451,13 @@ class EcoDevice(TuyaListener):
                 self._apply_dps(await link.status())
                 self._notify()
 
+    @callback
+    def apply_cloud_report(self, dps: dict[str, Any]) -> None:
+        """State pushed by the cloud while the LAN link is down (does not mark the device available)."""
+        self._apply_dps(dps, pushed=True)
+        self.last_update = time.time()
+        self._notify()
+
     async def async_reconnect(self) -> None:
         """Drop the current link (if any) and reconnect at once."""
         self._disconnected.set()

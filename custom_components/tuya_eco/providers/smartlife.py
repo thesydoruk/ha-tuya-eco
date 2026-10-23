@@ -25,6 +25,7 @@ from .base import (
     ProviderAuthError,
     ProviderError,
     ProviderLoginPending,
+    PushListener,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -93,6 +94,8 @@ class SmartLifeProvider(BaseProvider):
         self._manager: Any = None
         self._login_control: Any = None
         self.on_token_update: Callable[[dict[str, Any]], None] | None = None
+        self._push_listener: PushListener | None = None
+        self._sdk_listener: Any = None
 
     # ------------------------------------------------------------------ login
 
@@ -211,6 +214,7 @@ class SmartLifeProvider(BaseProvider):
                 for device in manager.device_repository.query_devices_by_home(home.id):
                     device.home_id = str(home.id)
                     device.home_name = str(home.name)
+                    device.set_up = True  # subscribe its MQTT topic
                     manager.device_map[device.id] = device
         except requests.RequestException as err:
             raise ProviderError(f"cloud unreachable: {err}") from err
@@ -320,6 +324,76 @@ class SmartLifeProvider(BaseProvider):
             return False
         return True
 
+    # ------------------------------------------------------------------ push (MQTT)
+
+    def _dispatch(self, func: Callable[..., None], *args: Any) -> None:
+        """Hand an SDK thread callback to the event loop."""
+        self.hass.loop.call_soon_threadsafe(func, *args)
+
+    def _get_sdk_listener(self) -> Any:
+        if self._sdk_listener is None:
+            from tuya_sharing import SharingDeviceListener  # noqa: PLC0415
+
+            provider = self
+
+            class _Listener(SharingDeviceListener):
+                def update_device(
+                    self, device: Any, updated_status_properties: Any = None, dp_timestamps: Any = None
+                ) -> None:
+                    target = provider._push_listener
+                    if target is None:
+                        return
+                    if updated_status_properties:
+                        status = getattr(device, "status", {}) or {}
+                        values = {code: status.get(code) for code in updated_status_properties}
+                        provider._dispatch(target.push_device_report, device.id, values)
+                    else:
+                        provider._dispatch(target.push_device_renamed, device.id, str(getattr(device, "name", "")))
+
+                def add_device(self, device: Any) -> None:
+                    if provider._push_listener is not None:
+                        provider._dispatch(provider._push_listener.push_device_added, device.id)
+
+                def remove_device(self, device_id: str) -> None:
+                    if provider._push_listener is not None:
+                        provider._dispatch(provider._push_listener.push_device_removed, device_id)
+
+            self._sdk_listener = _Listener()
+        return self._sdk_listener
+
+    def _start_push_sync(self) -> bool:
+        manager = self._get_manager()
+        if not manager.device_map:
+            return False
+        if self._get_sdk_listener() not in manager.device_listeners:
+            manager.add_device_listener(self._get_sdk_listener())
+        manager.refresh_mq()
+        return manager.mq is not None
+
+    async def async_start_push(self, listener: PushListener) -> bool:
+        """(Re)connect the MQTT channel of the device-sharing API."""
+        self._push_listener = listener
+        try:
+            return await self.hass.async_add_executor_job(self._start_push_sync)
+        except Exception as err:  # noqa: BLE001 - push is an optimisation, never fatal
+            _LOGGER.debug("push channel unavailable: %s", err)
+            return False
+
+    def _stop_push_sync(self) -> None:
+        manager = self._manager
+        if manager is not None and manager.mq is not None:
+            manager.mq.stop()
+            manager.mq = None
+
+    async def async_stop_push(self) -> None:
+        """Disconnect the MQTT channel."""
+        self._push_listener = None
+        try:
+            await self.hass.async_add_executor_job(self._stop_push_sync)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("push channel stop failed: %s", err)
+
     async def async_close(self) -> None:
         """Release."""
+        await self.async_stop_push()
         self._manager = None

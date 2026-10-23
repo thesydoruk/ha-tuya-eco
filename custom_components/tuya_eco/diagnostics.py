@@ -40,6 +40,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         "options": dict(entry.options),
         "provider": hub.provider.key,
         "last_cloud_error": hub.last_cloud_error,
+        "push_active": hub.push_active,
         "skipped_conflicts": [
             {
                 "id": dev_id,
