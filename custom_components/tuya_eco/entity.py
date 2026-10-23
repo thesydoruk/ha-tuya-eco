@@ -32,9 +32,12 @@ class EcoEntity(Entity):
         self.device = device
         self.definition = definition
         self._attr_unique_id = f"{device.id}_{definition.key}"
-        self._attr_name = definition.name
         if definition.name is None:
             self._attr_name = None  # takes the device name
+        elif not definition.translation_key:
+            self._attr_name = definition.name
+        # else: the name comes from translations (HA falls back to English automatically);
+        # setting _attr_name would take precedence over them.
         if definition.device_class:
             self._attr_device_class = definition.device_class  # type: ignore[assignment]
         if definition.entity_category:

@@ -287,3 +287,10 @@ def test_every_translation_key_has_an_english_string() -> None:
         assert key in strings["light"]
     for key in ("curtain_n", "door_n", "blind"):
         assert key in strings["cover"]
+
+
+def test_unknown_codes_keep_their_english_name() -> None:
+    device = _dev("cz", [(1, "switch", DpType.BOOLEAN, {}, False), (101, "mystery_flag", DpType.BOOLEAN, {}, False)])
+    mystery = next(d for d in build_entities(device) if d.key == "mystery_flag")
+    assert mystery.translation_key is None
+    assert mystery.name == "Mystery flag"

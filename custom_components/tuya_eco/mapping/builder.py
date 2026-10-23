@@ -827,6 +827,19 @@ _NUMBERED_KEYS = {
     (Platform.EVENT, "button"): "button_n",
     (Platform.VALVE, "switch"): "zone_n",
 }
+# Only codes with an English string in strings.json may become translation keys;
+# anything else keeps its generated English name.
+_KNOWN_KEYS: dict[Platform, frozenset[str]] = {
+    Platform.SWITCH: frozenset(C.SWITCHES),
+    Platform.BINARY_SENSOR: frozenset(C.BINARY_SENSORS),
+    Platform.NUMBER: frozenset(C.NUMBERS),
+    Platform.SELECT: frozenset(C.SELECTS),
+    Platform.SENSOR: frozenset(C.SENSORS) | {"bright_value"},
+    Platform.BUTTON: frozenset(C.BUTTONS),
+    Platform.LIGHT: frozenset({"floodlight", "indicator", "night_light", "backlight"}),
+    Platform.COVER: frozenset({"blind"}),
+    Platform.ALARM_CONTROL_PANEL: frozenset({"alarm"}),
+}
 _FIXED_KEYS = {
     (Platform.EVENT, "alarm_message"): "doorbell_message",
     (Platform.EVENT, "doorbell_pic"): "doorbell_picture",
@@ -855,4 +868,5 @@ def assign_translation_keys(defs: list[EntityDef]) -> None:
             d.translation_key = numbered
             d.meta["translation_placeholders"] = {"n": str(idx)}
             continue
-        d.translation_key = d.key
+        if d.key in _KNOWN_KEYS.get(d.platform, frozenset()):
+            d.translation_key = d.key
