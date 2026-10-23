@@ -73,7 +73,7 @@ class EcoDevice(TuyaListener):
         self.poll_interval = poll_interval
         self.host: str | None = host
         self.version: float | None = version
-        self.dps: dict[str, Any] = {}
+        self.dps: dict[str, Any] = self._seed_from_cloud(info)
         self.available = False
         self.last_update: float = 0.0
         self.last_error: str | None = None
@@ -90,6 +90,16 @@ class EcoDevice(TuyaListener):
         self._pending: dict[str, tuple[Any, float]] = {}
         # Per-DP counter of *pushed* reports (event entities fire on every push, not on polls).
         self.push_counts: dict[str, int] = {}
+
+    @staticmethod
+    def _seed_from_cloud(info: CloudDevice) -> dict[str, Any]:
+        """Initial DP values from the last cloud status (devices rarely push every DP on connect)."""
+        seeded: dict[str, Any] = {}
+        for code, value in (info.status or {}).items():
+            spec = info.codes.get(code)
+            if spec is not None and value is not None and value != "":
+                seeded[str(spec.dp_id)] = value
+        return seeded
 
     # ------------------------------------------------------------------ identity
 
@@ -181,6 +191,8 @@ class EcoDevice(TuyaListener):
         if not info.dp_schema and self.info.dp_schema:
             info.dp_schema = self.info.dp_schema  # keep what we had
         self.info = info
+        for dp, value in self._seed_from_cloud(info).items():
+            self.dps.setdefault(dp, value)
         if gateway is not None:
             self.gateway = gateway
         if key_changed:
