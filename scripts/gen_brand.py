@@ -19,60 +19,48 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "brand"
 
-TEAL = (23, 128, 112)
-TEAL_DARK = (16, 94, 82)
-LEAF = (255, 255, 255)
-VEIN = (178, 226, 210)
+TEAL = (30, 86, 120)  # deep blue-teal badge
+TEAL_DARK = (22, 62, 88)
+NODE = (255, 255, 255)
+LINK = (170, 214, 232)
+RING = (92, 150, 182)
+ACCENT = (255, 160, 48)  # the hub: Tuya-orange
 TEXT = (28, 40, 38)
 
 
-def _leaf(size: int) -> Image.Image:
-    """A leaf: a lens of two arcs pointing to the top-right, with a vein and a stem."""
+def _ecosystem(size: int) -> Image.Image:
+    """A hub node with device nodes around it, joined by links: an ecosystem."""
     import math
 
     s = size
     layer = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    base = (s * 0.27, s * 0.76)
-    length, width = s * 0.56, s * 0.19
-    angle = math.radians(-46)
-    ca, sa = math.cos(angle), math.sin(angle)
-
-    def to_xy(t: float, side: float) -> tuple[float, float]:
-        x, y = t * length, side * width * math.sin(math.pi * t) ** 0.85
-        return base[0] + x * ca - y * sa, base[1] + x * sa + y * ca
-
-    steps = 64
-    upper = [to_xy(i / steps, 1) for i in range(steps + 1)]
-    lower = [to_xy(i / steps, -1) for i in range(steps, -1, -1)]
-    d.polygon(upper + lower, fill=LEAF)
-    w = max(2, s // 44)
-    d.line([to_xy(0.08, 0), to_xy(0.88, 0)], fill=VEIN, width=w)
-    for t in (0.3, 0.5, 0.7):
-        for side in (1, -1):
-            d.line([to_xy(t, 0), to_xy(t + 0.14, side * 0.55)], fill=VEIN, width=max(1, w // 2))
-    stem_end = (base[0] - s * 0.09 * ca, base[1] - s * 0.09 * sa)
-    d.line([base, stem_end], fill=LEAF, width=w + 2)
-    return layer
-
-
-def _wifi(size: int) -> Image.Image:
-    """Three signal arcs in the top-right corner."""
-    s = size
-    layer = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    cx, cy = s * 0.71, s * 0.29
-    w = max(2, s // 40)
-    for r in (0.055, 0.105, 0.155):
-        rr = s * r
-        d.arc((cx - rr, cy - rr, cx + rr, cy + rr), start=210, end=330, fill=LEAF, width=w)
-    dot = s * 0.018
-    d.ellipse((cx - dot, cy - dot, cx + dot, cy + dot), fill=LEAF)
+    cx, cy = s * 0.5, s * 0.5
+    ring = s * 0.30
+    hub_r = s * 0.105
+    node_r = s * 0.058
+    link_w = max(3, s // 60)
+    nodes = []
+    for i in range(6):
+        a = math.radians(-90 + i * 60)
+        nodes.append((cx + ring * math.cos(a), cy + ring * math.sin(a)))
+    # faint outer ring joining the devices
+    d.ellipse((cx - ring, cy - ring, cx + ring, cy + ring), outline=RING, width=max(2, s // 110))
+    # spokes
+    for x, y in nodes:
+        d.line([(cx, cy), (x, y)], fill=LINK, width=link_w)
+    # device nodes
+    for x, y in nodes:
+        d.ellipse((x - node_r, y - node_r, x + node_r, y + node_r), fill=NODE)
+        d.ellipse((x - node_r * 0.45, y - node_r * 0.45, x + node_r * 0.45, y + node_r * 0.45), fill=TEAL)
+    # hub
+    d.ellipse((cx - hub_r, cy - hub_r, cx + hub_r, cy + hub_r), fill=NODE)
+    d.ellipse((cx - hub_r * 0.55, cy - hub_r * 0.55, cx + hub_r * 0.55, cy + hub_r * 0.55), fill=ACCENT)
     return layer
 
 
 def render_icon(size: int) -> Image.Image:
-    """Round teal badge with a leaf and signal arcs."""
+    """Round badge with the ecosystem graph."""
     scale = 4  # supersample for smooth edges
     s = size * scale
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
@@ -81,8 +69,7 @@ def render_icon(size: int) -> Image.Image:
     d.ellipse((pad, pad, s - pad, s - pad), fill=TEAL_DARK)
     inner = s * 0.075
     d.ellipse((inner, inner, s - inner, s - inner), fill=TEAL)
-    img.alpha_composite(_leaf(s))
-    img.alpha_composite(_wifi(s))
+    img.alpha_composite(_ecosystem(s))
     return img.resize((size, size), Image.LANCZOS)
 
 
