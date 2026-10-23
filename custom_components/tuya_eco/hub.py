@@ -251,11 +251,11 @@ class EcoHub:
         registry = dr.async_get(self.hass)
         extra: dict[str, Any] = {}
         if info.gateway_id:
-            gateway = registry.async_get_device(identifiers={(DOMAIN, info.gateway_id)})
+            gateway = self._device_by_identifier(registry, info.gateway_id)
             if gateway is not None:
                 extra["via_device_id"] = gateway.id
         subentry_id = self._subentry_by_home.get(info.home_id) if info.home_id else None
-        existing = registry.async_get_device(identifiers={(DOMAIN, info.id)})
+        existing = self._device_by_identifier(registry, info.id)
         # A new device is created straight in its home; an existing one is moved
         # explicitly below (re-registering it under another subentry is deprecated).
         if subentry_id and existing is None:
@@ -270,6 +270,13 @@ class EcoHub:
             **extra,
         )
         self._async_move_to_subentry(registry, device_entry, subentry_id)
+
+    def _device_by_identifier(self, registry: dr.DeviceRegistry, tuya_id: str) -> Any:
+        """Device entry of this config entry for a Tuya id (identifiers are per entry since HA 2026.8)."""
+        lookup = getattr(registry, "async_get_device_by_identifier", None)
+        if lookup is not None:
+            return lookup((DOMAIN, tuya_id), self.entry.entry_id)
+        return registry.async_get_device(identifiers={(DOMAIN, tuya_id)})
 
     def subentry_for(self, device: EcoDevice) -> str | None:
         """Config subentry (home) a device's entities belong to."""
@@ -446,7 +453,7 @@ class EcoHub:
         self._hosts.pop(dev_id, None)
         self._versions.pop(dev_id, None)
         registry = dr.async_get(self.hass)
-        reg_entry = registry.async_get_device(identifiers={(DOMAIN, dev_id)})
+        reg_entry = self._device_by_identifier(registry, dev_id)
         if reg_entry is not None:
             registry.async_remove_device(reg_entry.id)
         _LOGGER.info("%s: removed device %s (%s)", self.entry.title, info.name if info else dev_id, dev_id)
