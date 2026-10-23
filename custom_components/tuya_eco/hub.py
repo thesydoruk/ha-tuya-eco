@@ -255,7 +255,10 @@ class EcoHub:
             if gateway is not None:
                 extra["via_device_id"] = gateway.id
         subentry_id = self._subentry_by_home.get(info.home_id) if info.home_id else None
-        if subentry_id:
+        existing = registry.async_get_device(identifiers={(DOMAIN, info.id)})
+        # A new device is created straight in its home; an existing one is moved
+        # explicitly below (re-registering it under another subentry is deprecated).
+        if subentry_id and existing is None:
             extra["config_subentry_id"] = subentry_id
         device_entry = registry.async_get_or_create(
             config_entry_id=self.entry.entry_id,

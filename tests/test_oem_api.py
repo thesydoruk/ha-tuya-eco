@@ -172,3 +172,77 @@ def test_convert_mobile_device() -> None:
     assert device.gateway_id == "" and device.node_id == ""
     restored = type(device).from_dict(device.as_dict())
     assert restored.dp_schema[22].code == "bright_value"
+
+
+async def test_provider_fetches_schema_once_per_product(monkeypatch) -> None:
+    """The device list has no schema; device.get is called once per product id."""
+    from types import SimpleNamespace
+
+    from custom_components.tuya_eco.providers.ledvance import LedvanceProvider
+
+    calls: list[str] = []
+    schema = json.dumps(
+        [
+            {"id": 20, "code": "switch_led", "mode": "rw", "type": "obj", "property": {"type": "bool"}},
+            {
+                "id": 22,
+                "code": "bright_value",
+                "mode": "rw",
+                "type": "obj",
+                "property": {"type": "value", "min": 10, "max": 1000},
+            },
+        ]
+    )
+
+    class FakeApi:
+        sid = "s"
+
+        async def groups(self):
+            return [{"groupId": 1, "name": "Kyiv"}]
+
+        async def devices(self, gid):
+            return [
+                {
+                    "devId": "bf0000000000000000a1",
+                    "name": "L1",
+                    "productId": "p1",
+                    "localKey": "k1",
+                    "dps": {"20": True, "22": 500},
+                },
+                {
+                    "devId": "bf0000000000000000a2",
+                    "name": "L2",
+                    "productId": "p1",
+                    "localKey": "k2",
+                    "dps": {"20": False},
+                },
+                {
+                    "devId": "bf0000000000000000b3",
+                    "name": "P1",
+                    "productId": "p2",
+                    "localKey": "k3",
+                    "dps": {"1": True},
+                },
+            ]
+
+        async def device_get(self, dev_id):
+            calls.append(dev_id)
+            if dev_id.startswith("bf0000000000000000a"):
+                return {"schema": schema, "pv": "3.4", "isOnline": True}
+            return {
+                "schema": json.dumps(
+                    [{"id": 1, "code": "switch_1", "mode": "rw", "type": "obj", "property": {"type": "bool"}}]
+                ),
+                "pv": "3.3",
+            }
+
+    provider = LedvanceProvider(SimpleNamespace())  # type: ignore[arg-type]
+    monkeypatch.setattr(provider, "_get_api", lambda: FakeApi())
+    devices = {d.id: d for d in await provider.async_fetch_devices()}
+    assert len(calls) == 2  # one per product id, not per device
+    assert devices["bf0000000000000000a1"].codes["bright_value"].dp_id == 22
+    assert devices["bf0000000000000000a2"].dp_schema == devices["bf0000000000000000a1"].dp_schema
+    assert devices["bf0000000000000000a1"].protocol_version == "3.4"
+    assert devices["bf0000000000000000a1"].status == {"switch_led": True, "bright_value": 500}
+    assert devices["bf0000000000000000a1"].home_name == "Kyiv"
+    assert devices["bf0000000000000000b3"].codes["switch_1"].dp_id == 1

@@ -36,8 +36,17 @@
 
 ## Commands
 
+Two local environments: `.venv` (Python 3.12, HA 2025.1 — oldest supported core) and
+`.venv313` (Python 3.13, newest HA that installs on Windows; it needs the `fcntl`/`resource`
+stub modules placed in its site-packages because HA imports them at startup). Run both
+before committing core changes; CI runs the newest HA on Linux.
+
 ```bash
 .venv/Scripts/python -m pytest -q
+```
+
+```bash
+.venv313/Scripts/python -m pytest -q
 ```
 
 ```bash

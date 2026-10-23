@@ -447,6 +447,10 @@ class TuyaOemProvider(BaseProvider):
         self._custom_profile: OemAppProfile | None = None
         self._last_fetch = 0.0
         self._cache: list[CloudDevice] = []
+        # DP schema per product id: the device list has no schema, `tuya.m.device.get`
+        # does, and all devices of one product share it.
+        self._schema_by_product: dict[str, dict[int, DpSpec]] = {}
+        self._version_by_product: dict[str, str | None] = {}
 
     def _resolve_profile(self) -> OemAppProfile:
         if self.profile is not None:
@@ -548,12 +552,45 @@ class TuyaOemProvider(BaseProvider):
                 continue
             for raw in await api.devices(str(gid)):
                 try:
-                    devices.append(convert_mobile_device(raw, str(gid), str(group.get("name") or gid)))
+                    device = convert_mobile_device(raw, str(gid), str(group.get("name") or gid))
+                    await self._async_attach_schema(api, device, raw)
+                    devices.append(device)
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.warning("Skipping device %s: %s", raw.get("devId"), err)
         self._cache = devices
         self._last_fetch = now
         return list(devices)
+
+    async def _async_attach_schema(self, api: TuyaMobileApi, device: CloudDevice, raw: dict[str, Any]) -> None:
+        """Fill the DP schema (and protocol hint) from `tuya.m.device.get`, once per product."""
+        if device.dp_schema:
+            return
+        pid = device.product_id or device.id
+        if pid not in self._schema_by_product:
+            try:
+                detail = await api.device_get(device.id)
+            except ProviderError as err:
+                _LOGGER.debug("%s: device.get failed: %s", device.id, err)
+                return
+            schema = parse_mobile_schema(detail.get("schema"))
+            if not schema:
+                return
+            self._schema_by_product[pid] = schema
+            self._version_by_product[pid] = str(detail["pv"]) if detail.get("pv") else None
+            if detail.get("isOnline") is not None:
+                device.online = bool(detail["isOnline"])
+            await asyncio.sleep(0.3)  # be gentle with the OEM endpoint
+        device.dp_schema = dict(self._schema_by_product[pid])
+        device.protocol_version = device.protocol_version or self._version_by_product.get(pid)
+        if not device.status:
+            code_by_dp = {dp: spec.code for dp, spec in device.dp_schema.items()}
+            for dp, value in (raw.get("dps") or {}).items():
+                try:
+                    code = code_by_dp.get(int(dp))
+                except (TypeError, ValueError):
+                    continue
+                if code:
+                    device.status[code] = value
 
     async def async_list_homes(self) -> list[Home]:
         """Homes ("locations") of the account."""
