@@ -1,0 +1,65 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose the ecosystem",
+        "description": "Pick the app your devices are paired with. The cloud is used only to obtain local keys; control is local.",
+        "data": {
+          "provider": "Ecosystem / app"
+        }
+      },
+      "login": {
+        "title": "Sign in to {provider}",
+        "description": "Smart Life / Tuya Smart: enter the user code shown in the app under Me → Settings → Account and Security. Ledvance SMART+ / Sylvania: use the e-mail and password of the app account. Tuya IoT Platform: paste the cloud project access id/secret.",
+        "data": {
+          "user_code": "User code (from the app)",
+          "email": "E-mail",
+          "password": "Password",
+          "region": "Account region",
+          "country_code": "Country code (optional)",
+          "client_id": "App client id",
+          "secret": "App secret",
+          "api_region": "Data center",
+          "api_key": "Access ID / Client ID",
+          "api_secret": "Access secret",
+          "api_device_id": "Any device id of the account (optional)",
+          "name": "Device name",
+          "device_id": "Device id",
+          "local_key": "Local key",
+          "host": "IP address (optional, discovered automatically)",
+          "protocol_version": "Protocol version"
+        }
+      },
+      "scan": {
+        "title": "Scan the QR code",
+        "description": "Open the Smart Life or Tuya Smart app, tap “+” → “Scan”, scan this code and confirm. Then press Submit."
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate {provider}",
+        "description": "The cloud session expired. Sign in again to refresh the local keys."
+      }
+    },
+    "error": {
+      "auth_failed": "Authentication failed. Check the credentials and the region.",
+      "cannot_connect": "Could not reach the cloud. Try again later.",
+      "not_scanned": "The QR code has not been scanned (or confirmed) yet.",
+      "unknown": "Unexpected error, see the log."
+    },
+    "abort": {
+      "already_configured": "This account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tuya Eco options",
+        "data": {
+          "poll_interval": "Full poll interval",
+          "cloud_refresh_hours": "Cloud refresh interval (0 = only when a key fails)",
+          "cloud_fallback": "Send commands through the cloud when the device is unreachable on the LAN"
+        }
+      }
+    }
+  }
+}

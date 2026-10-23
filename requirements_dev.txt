@@ -1,0 +1,6 @@
+homeassistant>=2025.1
+pytest-homeassistant-custom-component
+tinytuya>=1.17.0
+tuya-device-sharing-sdk>=0.2.1
+pyyaml
+ruff

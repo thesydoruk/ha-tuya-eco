@@ -1,0 +1,141 @@
+# Tuya Eco — architecture
+
+Tuya Eco is a Home Assistant custom integration for devices of the Tuya ecosystem
+(Smart Life / Tuya Smart, Ledvance SMART+, and any other Tuya OEM app in the future).
+It controls devices **locally** (LAN protocol 3.1–3.5) and uses the vendor cloud only to
+obtain device metadata: `local_key`, data-point (DP) schema and names.
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│ Home Assistant config entry (one per provider account)                │
+│                                                                       │
+│  ┌──────────────┐   devices + keys + DP schema   ┌─────────────────┐  │
+│  │  Provider     │ ─────────────────────────────▶ │   EcoHub        │  │
+│  │  (cloud)      │ ◀───────────────────────────── │  (per entry)    │  │
+│  └──────────────┘   refresh on auth failure       └────────┬────────┘  │
+│   smartlife / ledvance / tuya_iot / …                      │           │
+│                                                            ▼           │
+│  ┌──────────────┐  ip/version   ┌─────────────────────────────────┐    │
+│  │ Discovery    │ ────────────▶ │  EcoDevice (one per device)     │    │
+│  │ UDP 6666/    │               │  • LocalLink (tinytuya, thread) │    │
+│  │ 6667/7000    │               │  • DP state + dp⇄code mapping   │    │
+│  └──────────────┘               │  • reconnect / key refresh      │    │
+│                                 └───────────────┬─────────────────┘    │
+│                                                 │ entity descriptions   │
+│                                                 ▼                       │
+│                     switch · light · sensor · binary_sensor · number    │
+│                     select · cover · fan · climate · button             │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+## Layers
+
+### 1. Providers (`providers/`)
+
+A provider is the adapter for one cloud/app ecosystem. It knows how to log in,
+how to list devices, and how to obtain the `local_key` and DP schema for each device.
+Providers are registered in `providers/registry.py` and selected in the config flow.
+
+```python
+class BaseProvider(ABC):
+    key: str                # "smartlife", "ledvance", "tuya_iot"
+    name: str               # shown in UI
+    login_kind: LoginKind   # QR_CODE | CREDENTIALS | API_KEYS
+
+    async def async_start_login(self, user_input) -> LoginStep
+    async def async_finish_login(self, state) -> ProviderSession
+    async def async_fetch_devices(self) -> list[CloudDevice]
+    def to_entry_data(self) -> dict
+    @classmethod
+    def from_entry_data(cls, hass, data) -> BaseProvider
+```
+
+`CloudDevice` is a provider-agnostic dataclass:
+
+| field              | meaning                                                                  |
+|--------------------|--------------------------------------------------------------------------|
+| `id`               | Tuya device id (`gwId`)                                                   |
+| `name`, `category`, `product_id`, `product_name`, `model`, `icon`         |
+| `local_key`        | AES key for the LAN protocol                                              |
+| `ip`, `online`     | last known cloud data (hint only, LAN discovery is authoritative)         |
+| `dp_schema`        | `dict[int, DpSpec]` — DP id → code, type (`Boolean/Integer/Enum/String/Json/Raw/Bitmap`), values spec, read-only flag |
+| `status`           | last cloud status by code (used as initial state before LAN connects)     |
+
+Implemented providers:
+
+* **smartlife** – Smart Life / Tuya Smart. QR login through `tuya-device-sharing-sdk`
+  (same mechanism as the core HA integration). The sharing API returns `local_key` and
+  `local_strategy` (DP id → code map) for every device.
+* **ledvance** – Ledvance SMART+ WiFi. See `docs/LEDVANCE.md` for the key-retrieval path.
+* **tuya_iot** – Tuya IoT Platform (Cloud project `client_id`/`secret`). Works for *any*
+  Tuya OEM app whose account was linked to the project. Uses the OpenAPI
+  `/v1.0/devices` + `/v1.1/devices/{id}/specifications`.
+
+Adding a provider = one new module in `providers/` and one line in the registry.
+
+### 2. Local engine (`local/`)
+
+* `link.py` – `LocalLink`: a thin asyncio wrapper around `tinytuya.Device` running in a
+  dedicated executor thread with a persistent socket. Handles protocol detection
+  (3.3 → 3.4 → 3.5 → 3.1), heartbeats, the receive loop and command sending.
+* `discovery.py` – asyncio UDP listener on ports 6666 (plain), 6667 (AES-ECB with the
+  well-known key) and 7000 (3.5, GCM). Emits `(gwId, ip, version)` events. Shared by all hubs.
+* `device.py` – `EcoDevice`: owns one `LocalLink`, the DP state and the reconnect state
+  machine:
+
+```
+            ┌───────────┐ discovery / cloud ip  ┌────────────┐
+   start ──▶│ RESOLVING │ ─────────────────────▶│ CONNECTING │
+            └───────────┘                        └─────┬──────┘
+                 ▲   ▲                                 │ ok
+       no answer │   │ key error ×N → refresh key      ▼
+                 │   │ from provider (re-paired)  ┌───────────┐
+                 └───┴────────────────────────────│ CONNECTED │──▶ unavailable on
+                      backoff 5s→10s→…→300s        └───────────┘    heartbeat loss
+```
+
+The three "re-connected device" cases are all handled automatically:
+
+1. **Device got a new IP** (DHCP, router reboot): discovery packet with a known `gwId`
+   and a different IP → link is re-created to the new address immediately.
+2. **Device was offline** (power cut): exponential backoff reconnect, plus an instant
+   retry when its discovery broadcast is seen again.
+3. **Device was re-paired in the app** (new `local_key`): decryption/handshake failures
+   trigger a provider refresh; if the key changed the device reconnects with the new key.
+   New devices found during such refresh are added without a restart.
+
+### 3. DP → entity mapping (`mapping/`)
+
+Entities are generated from the DP schema, not from a hand-written per-product table:
+
+1. `profiles/*.yaml` – optional explicit profiles keyed by `product_id` (highest priority,
+   tuya-local compatible shape).
+2. `mapping/categories.py` – rules per Tuya `category` + DP `code` (ported from the
+   knowledge in the core HA Tuya integration: e.g. `switch_led` → light, `temp_current`
+   → temperature sensor, `fan_speed` → fan percentage).
+3. `mapping/generic.py` – fallback heuristics by DP type: Boolean writable → switch,
+   Boolean read-only → binary_sensor, Integer writable → number, Integer read-only → sensor,
+   Enum writable → select, Enum read-only → sensor.
+
+Each rule produces an `EcoEntityDescription` (platform + HA entity description + DP ids).
+The result is cached in the config entry so entities are stable across restarts even
+when the cloud is unreachable.
+
+### 4. HA glue
+
+* `hub.py` – `EcoHub`: per config-entry manager. Loads the provider session, builds
+  `EcoDevice`s, subscribes to discovery, schedules the periodic cloud refresh
+  (default 12 h, plus on-demand), registers devices in the device registry.
+* `entity.py` – `EcoEntity` base: availability from the device, DP read/write helpers,
+  value scaling (`scale`, `step`, `min`, `max`), enum mapping.
+* `config_flow.py` – provider selection → provider-specific login steps → options
+  (polling interval, cloud refresh interval, per-device protocol override).
+* `diagnostics.py` – redacted dump of devices, DP schema and link state.
+
+## Design rules
+
+* The cloud is never on the hot path. If the cloud is down, everything keeps working from
+  the cached entry data.
+* All blocking I/O (tinytuya) runs in executor threads; one thread per device link.
+* A provider must not import HA platform code; a platform must not import a provider.
+* Everything that identifies a device is keyed by Tuya `device id`, never by IP.
