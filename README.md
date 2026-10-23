@@ -75,14 +75,41 @@ Devices appear automatically as soon as they are found on the LAN. UDP ports 666
 
 ## Entities
 
-Entities are derived from the DP schema: lights (white / colour temperature / HS colour, Tuya
-v1 and v2 colour encodings, multi-channel dimmers), switches, sensors (power, energy,
-temperature, humidity, air quality, battery…), binary sensors, numbers, selects, covers
-(including garage openers), fans and climates. Anything unknown falls back to a sensible
-generic entity by DP type, and a diagnostics download shows the full schema and link state.
+Entities are derived from the DP schema, following the semantics of Tuya's standard
+instruction set (the same knowledge the core Home Assistant integration encodes):
 
-Custom profiles: drop a YAML file in `custom_components/tuya_eco/profiles/` keyed by product id
-(format documented in `mapping/profiles.py`).
+| Platform | Built from |
+|---|---|
+| light | `switch_led*`, `bright_value*`, `temp_value*`, `colour_data*`, `work_mode`; multi-channel dimmers, floodlights, backlights, night lights, remote-style lights (`ykq`) |
+| switch | writable booleans (`switch*`, `child_lock`, `anion`, camera settings…) |
+| sensor | temperature, humidity, power/energy (incl. multi-channel), air quality, battery, weather stations, water/pool testers, vacuum consumables… |
+| binary_sensor | door/motion/presence/leak/gas/smoke/CO/tamper/fault/vibration… |
+| number / select | writable integers and enums (countdowns, sensitivities, volumes, power-on behaviour…) |
+| cover | curtains (`control*`, `percent_*`, `situation_set`), curtain switches with motor direction (`control_back_mode`), curtain robots (`mach_operate`), tilt, Kogan blinds, garage openers |
+| fan | `switch_fan`, `fan_speed*` (integer or enum), direction, oscillation, presets |
+| climate | thermostats, radiator valves, heaters, air conditioners, water heaters: modes, presets, fan, swing, target humidity, °C/°F |
+| humidifier | humidifiers (`jsq`) and dehumidifiers (`cs`) |
+| vacuum | robot vacuums (`sd`): start/stop/pause/dock/locate, suction, activity from `status` |
+| valve | irrigation controllers (`ggq`, `sfkzq`), per zone |
+| siren | `alarm_switch` / `siren_switch` |
+| alarm_control_panel | alarm hubs (`mal`, `wg2`): `master_mode` / `master_state` |
+| button | one-shot actions (`reset_filter`, `reset_map`, `device_restart`, …) |
+| event | scene/wireless switches (`wxkg`: click / double click / long press per button) and doorbell messages/pictures; fired on pushed reports only |
+
+Anything unknown falls back to a sensible generic entity by DP type, and a diagnostics
+download shows the full schema and link state. Custom profiles: drop a YAML file in
+`custom_components/tuya_eco/profiles/` keyed by product id (format documented in
+`mapping/profiles.py`).
+
+Services: `tuya_eco.set_dps` (raw DP write), `tuya_eco.refresh_cloud`, `tuya_eco.reconnect`.
+
+## Protocol version
+
+Nothing to configure. The version is taken from the device's discovery broadcast when
+available, otherwise from the last version that worked, otherwise probed (3.3 → 3.4 → 3.5 →
+3.1 → 3.2). A firmware update that changes the protocol (e.g. 3.3 → 3.5) is picked up
+automatically on the next reconnect; with a broadcast it is immediate, without one it takes a
+few seconds of probing. The detected version is remembered per device.
 
 ## Development
 
@@ -97,12 +124,28 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements_dev.txt
 The protocol and device tests run against an in-process emulation of a Tuya device
 (`tests/fake_device.py`) covering protocol 3.1 – 3.5, so no hardware is needed.
 
-## Credits
+## Acknowledgements
 
-Built on the knowledge of [tinytuya](https://github.com/jasonacox/tinytuya) (whose output was
-used to generate the golden wire-format vectors in the tests), [localtuya](https://github.com/rospogrigio/localtuya),
-[tuya-local](https://github.com/make-all/tuya-local), the core Home Assistant Tuya integration
-and the Ledvance local-key work of [FlagX](https://github.com/FlagX/ha-ledvance-tuya-resync-localkey).
+Tuya Eco contains no code copied from other projects, but it would not exist without the
+reverse-engineering and the years of maintenance behind them. Projects whose work was used
+directly:
+
+| Project | What we took from it |
+|---|---|
+| [jasonacox/tinytuya](https://github.com/jasonacox/tinytuya) (MIT) | The reference for the LAN wire format (55AA/6699 framing, 3.4/3.5 session-key handshake, device22 quirks, UDP discovery). Its output generated the golden vectors in `tests/test_wire.py` and the first version of this integration used its packing helpers. |
+| [rospogrigio/localtuya](https://github.com/rospogrigio/localtuya) and the [xZetsubou/hass-localtuya](https://github.com/xZetsubou/hass-localtuya) fork (GPL-3.0) | The asyncio protocol design (dispatcher keyed by sequence number, sentinel keys for heartbeat/session replies), the passive IP re-resolution from discovery broadcasts and the reconnect-on-broadcast idea. |
+| [make-all/tuya-local](https://github.com/make-all/tuya-local) (MIT) | Reconnect/back-off strategy, protocol-version rotation, the pending-update overlay for optimistic state, the YAML profile idea and many DP-code semantics. |
+| [home-assistant/core — tuya](https://github.com/home-assistant/core/tree/dev/homeassistant/components/tuya) (Apache-2.0) | The QR login flow through the device-sharing API, the category/DP-code knowledge behind the entity mapping, and the colour-data encodings. |
+| [tuya/tuya-device-sharing-sdk](https://github.com/tuya/tuya-device-sharing-sdk) (MIT) | Used as a dependency for the Smart Life / Tuya Smart login and device list. |
+| [vineetchoudhary/tuya-local-key](https://github.com/vineetchoudhary/tuya-local-key) | Confirmed that the device-sharing API returns local keys and documented its limits for OEM apps. |
+| [FlagX/ha-ledvance-tuya-resync-localkey](https://github.com/FlagX/ha-ledvance-tuya-resync-localkey) (MIT) | The Tuya mobile-app API route for Ledvance SMART+: request signing, login and the app identifiers. |
+| [buggedcom/hass-ledvance](https://github.com/buggedcom/hass-ledvance) / [terkon28/hass-ledvance](https://github.com/terkon28/hass-ledvance) | A clean Python client of the same API (regions, session refresh, textbook RSA), used as the reference while porting it to aiohttp. |
+| [Kosztyk/homebridge-ledvance-native](https://github.com/Kosztyk/homebridge-ledvance-native) | The silent `tuya.m.user.session.update` refresh and rate-limit handling. |
+| [rgsilva — Reverse engineering Positivo's smart home app](https://rgsilva.com/blog/reverse-engineering-positivos-smart-home-app/) and [nalajcie/tuya-sign-hacking](https://github.com/nalajcie/tuya-sign-hacking) | The original analysis of the mobile-app signature scheme. |
+| [tuya-convert](https://github.com/ct-Open-Source/tuya-convert) | The key of the encrypted discovery broadcasts. |
+| [codetheweb/tuyapi](https://github.com/codetheweb/tuyapi) | Early documentation of the LAN protocol and of why OEM apps cannot be linked the normal way. |
+
+Thanks to all of them.
 
 ## License
 

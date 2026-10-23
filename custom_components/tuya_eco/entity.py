@@ -43,6 +43,8 @@ class EcoEntity(Entity):
             self._attr_icon = definition.icon
         if definition.translation_key:
             self._attr_translation_key = definition.translation_key
+        if definition.meta.get("enabled_default") is False:
+            self._attr_entity_registry_enabled_default = False
         info = device.info
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device.id)},

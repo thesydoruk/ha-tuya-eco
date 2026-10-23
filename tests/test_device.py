@@ -178,3 +178,87 @@ async def test_wrong_key_triggers_refresh_and_new_key_connects(fake_hass, discov
     finally:
         await device.async_stop()
         await fake.stop()
+
+
+async def _connect_with_port_holder(monkeypatch, holder: dict[str, int]) -> None:
+    """Like _connect_with_port, but the target port is read at call time (simulates a reflashed device)."""
+    original = device_mod.connect
+
+    async def _patched(host, device_id, local_key, version, listener, **kwargs):
+        kwargs["port"] = holder["port"]
+        return await original(host, device_id, local_key, version, listener, **kwargs)
+
+    monkeypatch.setattr(device_mod, "connect", _patched)
+
+
+async def test_firmware_upgrade_changes_protocol_without_broadcast(fake_hass, discovery, monkeypatch) -> None:
+    """3.3 device gets a firmware that speaks 3.5 and never broadcasts: the stored version must be re-detected."""
+    old = FakeTuyaDevice(DEVICE_ID, KEY, 3.3)
+    await old.start()
+    holder = {"port": old.port}
+    await _connect_with_port_holder(monkeypatch, holder)
+    monkeypatch.setattr(device_mod, "BACKOFF_MIN", 0.2)
+    device = EcoDevice(fake_hass, _info(), discovery, host="127.0.0.1", version=3.3, poll_interval=5)
+    new = FakeTuyaDevice(DEVICE_ID, KEY, 3.5)
+    try:
+        await device.async_start()
+        await _wait_for(lambda: device.available)
+        assert device.version == 3.3
+
+        # "firmware update": the device reboots with protocol 3.5 on the same address
+        await new.start()
+        holder["port"] = new.port
+        await old.stop()
+        await _wait_for(lambda: not device.available)
+        await _wait_for(lambda: device.available, timeout=60)
+        assert device.version == 3.5
+        assert device.dps == {"1": True, "2": 50}
+    finally:
+        await device.async_stop()
+        await new.stop()
+
+
+async def test_firmware_upgrade_with_broadcast_is_immediate(fake_hass, discovery, monkeypatch) -> None:
+    """When the upgraded device announces its new version, it is tried first."""
+    old = FakeTuyaDevice(DEVICE_ID, KEY, 3.3)
+    await old.start()
+    holder = {"port": old.port}
+    await _connect_with_port_holder(monkeypatch, holder)
+    monkeypatch.setattr(device_mod, "BACKOFF_MIN", 0.2)
+    device = EcoDevice(fake_hass, _info(), discovery, host="127.0.0.1", version=3.3, poll_interval=5)
+    new = FakeTuyaDevice(DEVICE_ID, KEY, 3.4)
+    try:
+        await device.async_start()
+        await _wait_for(lambda: device.available)
+        await new.start()
+        holder["port"] = new.port
+        await old.stop()
+        await _wait_for(lambda: not device.available)
+        discovery.devices[DEVICE_ID] = DiscoveredDevice(DEVICE_ID, "127.0.0.1", "3.4", None, 0)
+        device._discovered(discovery.devices[DEVICE_ID])
+        assert device._candidate_versions()[0] == 3.4
+        await _wait_for(lambda: device.available, timeout=10)
+        assert device.version == 3.4
+    finally:
+        await device.async_stop()
+        await new.stop()
+
+
+async def test_push_counter_distinguishes_pushes_from_polls(fake_hass, discovery, monkeypatch) -> None:
+    """Scene-switch events must fire on pushes only; polls repeat the last value."""
+    fake = FakeTuyaDevice(DEVICE_ID, KEY, 3.3, dps={"1": "click"})
+    await fake.start()
+    await _connect_with_port(monkeypatch, fake.port)
+    device = EcoDevice(fake_hass, _info(), discovery, host="127.0.0.1", version=3.3, poll_interval=0.3)
+    try:
+        await device.async_start()
+        await _wait_for(lambda: device.available)
+        await asyncio.sleep(0.8)  # a couple of polls
+        assert device.push_counts.get("1", 0) == 0
+        fake.push({"1": "click"})
+        await _wait_for(lambda: device.push_counts.get("1", 0) == 1)
+        fake.push({"1": "click"})
+        await _wait_for(lambda: device.push_counts.get("1", 0) == 2)
+    finally:
+        await device.async_stop()
+        await fake.stop()

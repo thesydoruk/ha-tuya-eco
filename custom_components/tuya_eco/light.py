@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import colorsys
+import json
 import logging
 from typing import Any
 
@@ -10,6 +11,7 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP_KELVIN,
     ATTR_HS_COLOR,
+    ATTR_WHITE,
     ColorMode,
     LightEntity,
 )
@@ -37,20 +39,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_setup_platform_entities(hass, entry, async_add_entities, Platform.LIGHT, EcoLight)
 
 
-def _decode_colour(raw: Any, v2: bool) -> tuple[float, float, float] | None:
-    """Return (h 0-360, s 0-1, v 0-1) from Tuya colour data."""
+def _decode_colour(raw: Any, v2: bool, s_max: int = 0, v_max: int = 0) -> tuple[float, float, float] | None:
+    """Return (h 0-360, s 0-1, v 0-1) from Tuya colour data (hex string or JSON dict)."""
+    if isinstance(raw, dict):
+        try:
+            h = float(raw.get("h", 0))
+            s = float(raw.get("s", 0)) / (s_max or (1000 if v2 else 255))
+            v = float(raw.get("v", 0)) / (v_max or (1000 if v2 else 255))
+        except (TypeError, ValueError):
+            return None
+        return float(h % 361), max(0.0, min(1.0, s)), max(0.0, min(1.0, v))
     if not isinstance(raw, str):
         return None
     text = raw.strip()
+    if text.startswith("{"):
+        try:
+            return _decode_colour(json.loads(text), v2, s_max, v_max)
+        except ValueError:
+            return None
     try:
         if len(text) == 12 or (v2 and len(text) >= 12 and len(text) != 14):
             h = int(text[0:4], 16)
-            s = int(text[4:8], 16) / 1000
-            v = int(text[8:12], 16) / 1000
+            s = int(text[4:8], 16) / (s_max or 1000)
+            v = int(text[8:12], 16) / (v_max or 1000)
         elif len(text) == 14:
             h = int(text[6:10], 16)
-            s = int(text[10:12], 16) / 255
-            v = int(text[12:14], 16) / 255
+            s = int(text[10:12], 16) / (s_max or 255)
+            v = int(text[12:14], 16) / (v_max or 255)
         else:
             return None
     except ValueError:
@@ -58,13 +73,16 @@ def _decode_colour(raw: Any, v2: bool) -> tuple[float, float, float] | None:
     return float(h % 361), max(0.0, min(1.0, s)), max(0.0, min(1.0, v))
 
 
-def _encode_colour(h: float, s: float, v: float, v2: bool) -> str:
+def _encode_colour(h: float, s: float, v: float, v2: bool, s_max: int = 0, v_max: int = 0) -> str:
     """Encode (h 0-360, s 0-1, v 0-1) as Tuya colour data."""
     h_i = int(round(h)) % 361
     if v2:
-        return f"{h_i:04x}{int(round(s * 1000)):04x}{int(round(v * 1000)):04x}"
+        return f"{h_i:04x}{int(round(s * (s_max or 1000))):04x}{int(round(v * (v_max or 1000))):04x}"
     r, g, b = colorsys.hsv_to_rgb(h / 360, s, v)
-    return f"{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}{h_i:04x}{int(round(s * 255)):02x}{int(round(v * 255)):02x}"
+    return (
+        f"{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
+        f"{h_i:04x}{int(round(s * (s_max or 255))):02x}{int(round(v * (v_max or 255))):02x}"
+    )
 
 
 class EcoLight(EcoEntity, LightEntity):
@@ -79,13 +97,19 @@ class EcoLight(EcoEntity, LightEntity):
         meta = definition.meta
         self._bright = IntegerType.from_values(meta.get("brightness")) if "brightness" in definition.dps else None
         self._temp = IntegerType.from_values(meta.get("color_temp")) if "color_temp" in definition.dps else None
-        self._colour_v2 = bool((meta.get("color") or {}).get("v2", True))
+        colour_meta = meta.get("color") or {}
+        self._colour_v2 = bool(colour_meta.get("v2", True))
+        hsv = colour_meta.get("hsv") or {}
+        self._s_max = int((hsv.get("s") or {}).get("max") or 0)
+        self._v_max = int((hsv.get("v") or {}).get("max") or 0)
         self._modes: list[str] = list(meta.get("modes") or [])
         modes: set[ColorMode] = set()
         if "color" in definition.dps:
             modes.add(ColorMode.HS)
         if self._temp is not None:
             modes.add(ColorMode.COLOR_TEMP)
+        if ColorMode.HS in modes and self._temp is None and MODE_WHITE in self._modes and self._bright is not None:
+            modes.add(ColorMode.WHITE)
         if not modes:
             modes.add(ColorMode.BRIGHTNESS if self._bright is not None else ColorMode.ONOFF)
         self._attr_supported_color_modes = modes
@@ -113,6 +137,8 @@ class EcoLight(EcoEntity, LightEntity):
             return ColorMode.HS
         if ColorMode.COLOR_TEMP in modes:
             return ColorMode.COLOR_TEMP
+        if ColorMode.WHITE in modes:
+            return ColorMode.WHITE
         if ColorMode.HS in modes and self._work_mode is None:
             return ColorMode.HS
         if ColorMode.BRIGHTNESS in modes:
@@ -123,7 +149,7 @@ class EcoLight(EcoEntity, LightEntity):
     def brightness(self) -> int | None:
         """0-255."""
         if self.color_mode == ColorMode.HS:
-            hsv = _decode_colour(self.value("color"), self._colour_v2)
+            hsv = _decode_colour(self.value("color"), self._colour_v2, self._s_max, self._v_max)
             return None if hsv is None else int(round(hsv[2] * 255))
         if self._bright is None:
             return None
@@ -145,7 +171,7 @@ class EcoLight(EcoEntity, LightEntity):
     @property
     def hs_color(self) -> tuple[float, float] | None:
         """HS colour."""
-        hsv = _decode_colour(self.value("color"), self._colour_v2)
+        hsv = _decode_colour(self.value("color"), self._colour_v2, self._s_max, self._v_max)
         return None if hsv is None else (hsv[0], hsv[1] * 100)
 
     # ------------------------------------------------------------------ commands
@@ -157,11 +183,18 @@ class EcoLight(EcoEntity, LightEntity):
         hs = kwargs.get(ATTR_HS_COLOR)
         kelvin = kwargs.get(ATTR_COLOR_TEMP_KELVIN)
         mode_dp = self.dp("mode")
+        if ATTR_WHITE in kwargs:
+            brightness = kwargs[ATTR_WHITE]
+            hs = None
+            if mode_dp is not None and MODE_WHITE in self._modes:
+                dps[mode_dp] = MODE_WHITE
 
         if hs is not None and "color" in self.definition.dps:
-            current = _decode_colour(self.value("color"), self._colour_v2)
+            current = _decode_colour(self.value("color"), self._colour_v2, self._s_max, self._v_max)
             v = (brightness / 255) if brightness is not None else (current[2] if current else 1.0)
-            dps[self.dp("color")] = _encode_colour(hs[0], hs[1] / 100, max(0.01, v), self._colour_v2)  # type: ignore[index]
+            dps[self.dp("color")] = _encode_colour(
+                hs[0], hs[1] / 100, max(0.01, v), self._colour_v2, self._s_max, self._v_max
+            )  # type: ignore[index]
             if mode_dp is not None and MODE_COLOUR in self._modes:
                 dps[mode_dp] = MODE_COLOUR
         elif kelvin is not None and self._temp is not None:
@@ -171,10 +204,14 @@ class EcoLight(EcoEntity, LightEntity):
             if brightness is not None and self._bright is not None:
                 dps[self.dp("brightness")] = self._bright.remap_from(float(brightness), 0, 255)  # type: ignore[index]
         elif brightness is not None:
-            if self.color_mode == ColorMode.HS and "color" in self.definition.dps:
-                current = _decode_colour(self.value("color"), self._colour_v2) or (0.0, 0.0, 1.0)
+            if self.color_mode == ColorMode.HS and "color" in self.definition.dps and ATTR_WHITE not in kwargs:
+                current = _decode_colour(self.value("color"), self._colour_v2, self._s_max, self._v_max) or (
+                    0.0,
+                    0.0,
+                    1.0,
+                )
                 dps[self.dp("color")] = _encode_colour(
-                    current[0], current[1], max(0.01, brightness / 255), self._colour_v2
+                    current[0], current[1], max(0.01, brightness / 255), self._colour_v2, self._s_max, self._v_max
                 )  # type: ignore[index]
             elif self._bright is not None:
                 dps[self.dp("brightness")] = self._bright.remap_from(float(brightness), 0, 255)  # type: ignore[index]

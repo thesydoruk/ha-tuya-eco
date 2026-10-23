@@ -1,0 +1,28 @@
+set_dps:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: tuya_eco
+    dps:
+      required: true
+      example: '{"1": true, "2": 500}'
+      selector:
+        object:
+
+refresh_cloud:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: tuya_eco
+
+reconnect:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: tuya_eco

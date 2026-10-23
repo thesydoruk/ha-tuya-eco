@@ -49,6 +49,9 @@ class EcoFan(EcoEntity, FanEntity):
     @property
     def is_on(self) -> bool | None:
         """On."""
+        if "switch" not in self.definition.dps:
+            pct = self.percentage
+            return None if pct is None else pct > 0
         value = self.value("switch")
         return None if value is None else bool(value)
 
@@ -64,7 +67,7 @@ class EcoFan(EcoEntity, FanEntity):
             except ValueError:
                 return None
         if self._speed is not None:
-            return int(round(self._speed.remap_to(float(raw), 0, 100)))
+            return int(round(self._speed.remap_to(float(raw), 1, 100)))
         return None
 
     @property
@@ -89,22 +92,28 @@ class EcoFan(EcoEntity, FanEntity):
 
     async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs: Any) -> None:
         """On."""
-        dps: dict[int | str, Any] = {self.dp("switch"): True}  # type: ignore[dict-item]
+        dps: dict[int | str, Any] = {}
+        if "switch" in self.definition.dps:
+            dps[self.dp("switch")] = True  # type: ignore[index]
         if percentage is not None and "speed" in self.definition.dps:
             dps[self.dp("speed")] = self._speed_raw(percentage)  # type: ignore[index]
         if preset_mode is not None and "preset" in self.definition.dps:
             dps[self.dp("preset")] = preset_mode  # type: ignore[index]
-        await self.async_write_dps(dps)
+        if dps:
+            await self.async_write_dps(dps)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Off."""
-        await self.async_write("switch", False)
+        if "switch" in self.definition.dps:
+            await self.async_write("switch", False)
+        elif self._speed is not None:
+            await self.async_write("speed", self._speed.min)
 
     def _speed_raw(self, percentage: int) -> Any:
         if self._speed_options:
             return percentage_to_ordered_list_item(self._speed_options, percentage)
         if self._speed is not None:
-            return self._speed.remap_from(float(percentage), 0, 100)
+            return self._speed.remap_from(float(percentage), 1, 100)
         return percentage
 
     async def async_set_percentage(self, percentage: int) -> None:

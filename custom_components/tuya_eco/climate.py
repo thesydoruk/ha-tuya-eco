@@ -53,6 +53,30 @@ class EcoClimate(EcoEntity, ClimateEntity):
         if "fan" in definition.dps:
             features |= ClimateEntityFeature.FAN_MODE
             self._attr_fan_modes = [str(f) for f in meta.get("fan_modes", [])]
+        self._humidity_set = (
+            IntegerType.from_values(meta.get("humidity_set")) if "humidity_set" in definition.dps else None
+        )
+        self._humidity_cur = IntegerType.from_values(meta.get("humidity")) if "humidity" in definition.dps else None
+        if self._humidity_set is not None:
+            features |= ClimateEntityFeature.TARGET_HUMIDITY
+            self._attr_min_humidity = int(self._humidity_set.min_scaled)
+            self._attr_max_humidity = (
+                int(self._humidity_set.max_scaled) if self._humidity_set.max > self._humidity_set.min else 100
+            )
+        swing_modes: list[str] = []
+        if "swing" in definition.dps:
+            swing_modes = ["off", "on"]
+        if "swing_h" in definition.dps or "swing_v" in definition.dps:
+            swing_modes = ["off"]
+            if "swing_h" in definition.dps:
+                swing_modes.append("horizontal")
+            if "swing_v" in definition.dps:
+                swing_modes.append("vertical")
+            if "swing_h" in definition.dps and "swing_v" in definition.dps:
+                swing_modes.append("both")
+        if swing_modes:
+            features |= ClimateEntityFeature.SWING_MODE
+            self._attr_swing_modes = swing_modes
         if self._presets:
             features |= ClimateEntityFeature.PRESET_MODE
             self._attr_preset_modes = self._presets
@@ -67,9 +91,9 @@ class EcoClimate(EcoEntity, ClimateEntity):
                 continue
             if mode not in modes:
                 modes.append(mode)
-        if not self._mode_map:
-            cat = device.info.category
-            modes.append(HVACMode.COOL if cat == "kt" else HVACMode.HEAT)
+        self._switch_only = HVACMode(meta.get("switch_only_hvac", "heat"))
+        if (not self._mode_map or self._presets) and self._switch_only not in modes:
+            modes.append(self._switch_only)
         self._attr_hvac_modes = modes
 
     @property
@@ -101,8 +125,8 @@ class EcoClimate(EcoEntity, ClimateEntity):
                     return HVACMode(hvac)
                 except ValueError:
                     pass
-            return None
-        return self._attr_hvac_modes[-1] if self._attr_hvac_modes else None
+            return self._switch_only if self._presets else None
+        return self._switch_only
 
     @property
     def hvac_action(self) -> HVACAction | None:
@@ -121,6 +145,50 @@ class EcoClimate(EcoEntity, ClimateEntity):
                 return HVACAction.COOLING if cur > tgt else HVACAction.IDLE
             return HVACAction.COOLING
         return None
+
+    @property
+    def current_humidity(self) -> float | None:
+        """Measured humidity."""
+        return self._humidity_cur.scale_value(self.value("humidity")) if self._humidity_cur else None
+
+    @property
+    def target_humidity(self) -> float | None:
+        """Target humidity."""
+        return self._humidity_set.scale_value(self.value("humidity_set")) if self._humidity_set else None
+
+    @property
+    def swing_mode(self) -> str | None:
+        """Swing."""
+        if "swing" in self.definition.dps:
+            value = self.value("swing")
+            return None if value is None else ("on" if value else "off")
+        h = bool(self.value("swing_h")) if "swing_h" in self.definition.dps else False
+        v = bool(self.value("swing_v")) if "swing_v" in self.definition.dps else False
+        if h and v:
+            return "both"
+        if h:
+            return "horizontal"
+        if v:
+            return "vertical"
+        return "off"
+
+    async def async_set_humidity(self, humidity: int) -> None:
+        """Target humidity."""
+        if self._humidity_set is not None:
+            await self.async_write("humidity_set", self._humidity_set.scale_back(humidity))
+
+    async def async_set_swing_mode(self, swing_mode: str) -> None:
+        """Swing."""
+        if "swing" in self.definition.dps:
+            await self.async_write("swing", swing_mode == "on")
+            return
+        dps: dict[int | str, Any] = {}
+        if "swing_h" in self.definition.dps:
+            dps[self.dp("swing_h")] = swing_mode in ("horizontal", "both")  # type: ignore[index]
+        if "swing_v" in self.definition.dps:
+            dps[self.dp("swing_v")] = swing_mode in ("vertical", "both")  # type: ignore[index]
+        if dps:
+            await self.async_write_dps(dps)
 
     @property
     def fan_mode(self) -> str | None:

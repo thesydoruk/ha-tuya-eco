@@ -28,6 +28,8 @@ class FakeTuyaDevice:
         self.version = version
         self.version_bytes = f"{version:.1f}".encode()
         self.dps: dict[str, Any] = dict(dps or {"1": True, "2": 50})
+        # Zigbee/BLE children behind a gateway: node id ("cid") → their DPs.
+        self.children: dict[str, dict[str, Any]] = {}
         self.server: asyncio.AbstractServer | None = None
         self.port = 0
         self.writers: list[asyncio.StreamWriter] = []
@@ -113,6 +115,8 @@ class FakeTuyaDevice:
 
         body = self._decode(frame, session_key)
         self.received.append((frame.cmd, body))
+        cid = body.get("cid") or body.get("data", {}).get("cid")
+        store = self.children.setdefault(cid, {}) if cid else self.dps
         if frame.cmd == Cmd.HEART_BEAT:
             self._send(writer, Cmd.HEART_BEAT, b"", session_key, frame.seqno)
         elif frame.cmd in (Cmd.DP_QUERY, Cmd.DP_QUERY_NEW) or (
@@ -122,25 +126,36 @@ class FakeTuyaDevice:
             and all(v is None for v in body["dps"].values())
         ):
             if self.answer_dp_query:
-                self._send(writer, frame.cmd, json.dumps({"dps": self.dps}).encode(), session_key, frame.seqno)
+                reply: dict[str, Any] = {"dps": store}
+                if cid:
+                    reply["cid"] = cid
+                self._send(writer, frame.cmd, json.dumps(reply).encode(), session_key, frame.seqno)
             else:
                 self._send(writer, frame.cmd, b"", session_key, frame.seqno, retcode=1)
         elif frame.cmd in (Cmd.CONTROL, Cmd.CONTROL_NEW):
             new = body.get("dps") or body.get("data", {}).get("dps") or {}
-            self.dps.update(new)
+            store.update(new)
             if self.reply_to_control:
                 self._send(writer, frame.cmd, b"", session_key, frame.seqno)
-                self.push(new, writer, session_key)
+                self.push(new, writer, session_key, cid=cid)
         return session_key
 
     # ------------------------------------------------------------------ helpers
 
     def push(
-        self, dps: dict[str, Any], writer: asyncio.StreamWriter | None = None, session_key: bytes | None = None
+        self,
+        dps: dict[str, Any],
+        writer: asyncio.StreamWriter | None = None,
+        session_key: bytes | None = None,
+        *,
+        cid: str | None = None,
     ) -> None:
-        """Send an unsolicited STATUS frame."""
+        """Send an unsolicited STATUS frame (with `cid` for a gateway child)."""
         key = session_key or self._last_session_key
-        payload = json.dumps({"dps": dps, "t": 0}).encode()
+        body: dict[str, Any] = {"dps": dps, "t": 0}
+        if cid:
+            body["cid"] = cid
+        payload = json.dumps(body).encode()
         for w in [writer] if writer else list(self.writers):
             self._send(w, Cmd.STATUS, payload, key, 0, with_header=self.version >= 3.3)
 

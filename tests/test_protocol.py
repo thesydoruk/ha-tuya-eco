@@ -110,3 +110,31 @@ async def test_timeout_when_device_silent() -> None:
         await link.close()
     finally:
         await fake.stop()
+
+
+@pytest.mark.parametrize("version", [3.3, 3.4])
+async def test_gateway_sub_device(version: float) -> None:
+    """A Zigbee child is addressed through the gateway's link with its node id (cid)."""
+    gateway = FakeTuyaDevice(DEVICE_ID, KEY, version)
+    gateway.children["a4c138aabbccddee"] = {"1": False, "2": 20}
+    await gateway.start()
+    rec = Recorder()
+    other = Recorder()
+    try:
+        child = await connect("127.0.0.1", DEVICE_ID, KEY, version, rec, port=gateway.port, node_id="a4c138aabbccddee")
+        assert await child.status() == {"1": False, "2": 20}
+        await child.set_dps({"1": True})
+        await asyncio.wait_for(rec.event.wait(), 2)
+        assert gateway.children["a4c138aabbccddee"]["1"] is True
+        assert rec.updates[-1] == {"1": True}
+
+        # the gateway itself on a separate link ignores pushes that carry a cid
+        gw = await connect("127.0.0.1", DEVICE_ID, KEY, version, other, port=gateway.port)
+        assert await gw.status() == gateway.dps
+        gateway.push({"2": 99}, cid="a4c138aabbccddee")
+        await asyncio.sleep(0.3)
+        assert other.updates == []
+        await child.close()
+        await gw.close()
+    finally:
+        await gateway.stop()

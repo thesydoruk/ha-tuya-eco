@@ -88,6 +88,8 @@ class EcoDevice(TuyaListener):
         self._unsub_discovery: Callable[[], None] | None = None
         self._key_failure_cycles = 0
         self._pending: dict[str, tuple[Any, float]] = {}
+        # Per-DP counter of *pushed* reports (event entities fire on every push, not on polls).
+        self.push_counts: dict[str, int] = {}
 
     # ------------------------------------------------------------------ identity
 
@@ -366,7 +368,7 @@ class EcoDevice(TuyaListener):
 
     def status_updated(self, dps: dict[str, Any]) -> None:
         """Push from the device."""
-        self._apply_dps(dps)
+        self._apply_dps(dps, pushed=True)
         self.last_update = time.time()
         if not self.available:
             self.available = True
@@ -380,11 +382,13 @@ class EcoDevice(TuyaListener):
 
     # ------------------------------------------------------------------ state
 
-    def _apply_dps(self, dps: dict[str, Any]) -> None:
+    def _apply_dps(self, dps: dict[str, Any], *, pushed: bool = False) -> None:
         now = time.monotonic()
         for dp, value in dps.items():
             key = str(dp)
             self.dps[key] = value
+            if pushed:
+                self.push_counts[key] = self.push_counts.get(key, 0) + 1
             pending = self._pending.get(key)
             if pending and (pending[0] == value or now - pending[1] > 5):
                 self._pending.pop(key, None)
@@ -434,6 +438,11 @@ class EcoDevice(TuyaListener):
             with contextlib.suppress(TuyaLocalError):
                 self._apply_dps(await link.status())
                 self._notify()
+
+    async def async_reconnect(self) -> None:
+        """Drop the current link (if any) and reconnect at once."""
+        self._disconnected.set()
+        self._wake.set()
 
     async def async_request_refresh(self) -> None:
         """Poll now."""

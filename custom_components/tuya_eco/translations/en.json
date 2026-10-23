@@ -61,5 +61,41 @@
         }
       }
     }
+  },
+  "services": {
+    "set_dps": {
+      "name": "Set data points",
+      "description": "Write raw DP values to a device over the LAN (cloud fallback when enabled).",
+      "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The Tuya Eco device."
+        },
+        "dps": {
+          "name": "Data points",
+          "description": "Mapping of DP id to value, e.g. {\"1\": true}."
+        }
+      }
+    },
+    "refresh_cloud": {
+      "name": "Refresh from cloud",
+      "description": "Re-fetch devices, local keys and DP schemas from the provider now.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Limit the refresh to one account (all when omitted)."
+        }
+      }
+    },
+    "reconnect": {
+      "name": "Reconnect",
+      "description": "Drop the LAN connection of a device and reconnect immediately.",
+      "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The Tuya Eco device."
+        }
+      }
+    }
   }
 }

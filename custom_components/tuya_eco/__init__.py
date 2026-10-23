@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, PLATFORMS
 from .hub import EcoHub
+from .services import async_register_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ type EcoConfigEntry = ConfigEntry[EcoHub]
 
 async def async_setup_entry(hass: HomeAssistant, entry: EcoConfigEntry) -> bool:
     """Set up one provider account."""
+    async_register_services(hass)
     hub = EcoHub(hass, entry)
     await hub.async_setup()
     entry.runtime_data = hub

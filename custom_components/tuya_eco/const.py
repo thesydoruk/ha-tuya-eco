@@ -7,15 +7,22 @@ from homeassistant.const import Platform
 DOMAIN = "tuya_eco"
 
 PLATFORMS: list[Platform] = [
+    Platform.ALARM_CONTROL_PANEL,
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.CLIMATE,
     Platform.COVER,
+    Platform.EVENT,
     Platform.FAN,
+    Platform.HUMIDIFIER,
     Platform.LIGHT,
     Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SIREN,
     Platform.SWITCH,
+    Platform.VACUUM,
+    Platform.VALVE,
 ]
 
 # Config entry data keys
