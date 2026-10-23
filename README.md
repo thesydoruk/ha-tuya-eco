@@ -1,8 +1,22 @@
+<p align="center">
+  <img src="brand/logo@2x.png" alt="Tuya Eco" width="420">
+</p>
+
+<p align="center">
+  <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS custom repository"></a>
+  <a href="https://github.com/thesydoruk/ha-tuya-eco/actions/workflows/ci.yml"><img src="https://github.com/thesydoruk/ha-tuya-eco/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/thesydoruk/ha-tuya-eco/releases"><img src="https://img.shields.io/github/v/release/thesydoruk/ha-tuya-eco?include_prereleases" alt="Release"></a>
+  <img src="https://img.shields.io/badge/Home%20Assistant-2025.1%2B-03a9f4.svg" alt="Home Assistant 2025.1+">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/thesydoruk/ha-tuya-eco" alt="MIT license"></a>
+</p>
+
 # Tuya Eco for Home Assistant
 
 Local control of the **Tuya ecosystem** — Smart Life / Tuya Smart, **Ledvance SMART+ WiFi**,
 Sylvania Smart WiFi, Tuya IoT Platform projects and any other white-label Tuya app — from a
-single, modular integration.
+single, modular integration. Think *tuya-local*, but with the device knowledge fetched from the
+cloud once instead of maintained by hand, and with a provider layer that makes a new app a
+single module.
 
 * **Local first.** Devices are controlled over the LAN (Tuya protocol 3.1 – 3.5, including the
   session-key handshake of 3.4/3.5). The vendor cloud is only used to fetch the `local_key` and
@@ -38,6 +52,10 @@ single, modular integration.
 ### Manual
 
 Copy `custom_components/tuya_eco` into `<config>/custom_components/` and restart.
+
+The integration icon in the Home Assistant UI comes from the
+[home-assistant/brands](https://github.com/home-assistant/brands) repository; until the brand
+is merged there the integration shows a generic icon (see [docs/BRANDS.md](docs/BRANDS.md)).
 
 ## Setup
 
