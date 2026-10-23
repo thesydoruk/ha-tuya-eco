@@ -23,7 +23,7 @@ single, modular integration.
 | Smart Life / Tuya Smart | QR code scanned in the app (same as the core HA integration) | Tuya device-sharing API returns `local_key` + DP⇄code map |
 | Ledvance SMART+ WiFi | e-mail + password of the SMART+ account | Tuya mobile-app API with the SMART+ app identity; see [docs/LEDVANCE.md](docs/LEDVANCE.md) |
 | Sylvania Smart WiFi | e-mail + password | same as Ledvance |
-| Tuya IoT Platform | cloud project access id / secret | OpenAPI device list + specifications (via `tinytuya.Cloud`) |
+| Tuya IoT Platform | cloud project access id / secret | OpenAPI device list + specifications (own client) |
 | Other Tuya OEM app | e-mail + password + the app's client id / secret | Tuya mobile-app API |
 | Manual | device id + local key | you already have the key (e.g. shown in a newer SMART+ app) |
 
@@ -99,8 +99,8 @@ The protocol and device tests run against an in-process emulation of a Tuya devi
 
 ## Credits
 
-Built on the knowledge of [tinytuya](https://github.com/jasonacox/tinytuya) (MIT; its packing
-and crypto helpers are used directly), [localtuya](https://github.com/rospogrigio/localtuya),
+Built on the knowledge of [tinytuya](https://github.com/jasonacox/tinytuya) (whose output was
+used to generate the golden wire-format vectors in the tests), [localtuya](https://github.com/rospogrigio/localtuya),
 [tuya-local](https://github.com/make-all/tuya-local), the core Home Assistant Tuya integration
 and the Ledvance local-key work of [FlagX](https://github.com/FlagX/ha-ledvance-tuya-resync-localkey).
 

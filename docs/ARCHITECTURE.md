@@ -68,7 +68,7 @@ Implemented providers:
   `local_strategy` (DP id → code map) for every device.
 * **ledvance** – Ledvance SMART+ WiFi. See `docs/LEDVANCE.md` for the key-retrieval path.
 * **tuya_iot** – Tuya IoT Platform (Cloud project `client_id`/`secret`) through
-  `tinytuya.Cloud` (device list + DP mapping).
+  the integration's own OpenAPI client (`providers/tuya_openapi.py`).
 * **sylvania**, **tuya_oem** – the same mobile-app API as Ledvance with another app profile,
   or with identifiers the user pastes.
 * **manual** – device id + local key entered by hand; the DP schema is inferred from the first
@@ -80,8 +80,8 @@ Adding a provider = one new module in `providers/` and one line in the registry.
 
 * `protocol.py` – `TuyaLanProtocol`: a native `asyncio.Protocol` implementation of the Tuya
   LAN protocol 3.1 – 3.5 (55AA/6699 framing, AES-ECB/GCM, HMAC, 3.4/3.5 session-key handshake,
-  device22 query style). Only tinytuya's packing/crypto helpers are reused; nothing blocks the
-  event loop. Heartbeats every 10 s, two misses close the link.
+  device22 query style). `wire.py` holds the framing and ciphers (built on `cryptography`);
+  nothing blocks the event loop and no third-party Tuya library is involved. Heartbeats every 10 s, two misses close the link.
 * `discovery.py` – asyncio UDP listener on ports 6666 (plain), 6667 (AES-ECB with the
   well-known key) and 7000 (3.5, GCM). Emits `(gwId, ip, version)` events. Shared by all hubs.
 * `device.py` – `EcoDevice`: owns one `LocalLink`, the DP state and the reconnect state
@@ -140,7 +140,7 @@ when the cloud is unreachable.
 
 * The cloud is never on the hot path. If the cloud is down, everything keeps working from
   the cached entry data.
-* All blocking I/O (tinytuya) runs in executor threads; one thread per device link.
+* The LAN side is pure asyncio. Only the synchronous sharing SDK runs in executor threads.
 * A provider must not import HA platform code; a platform must not import a provider.
 * Everything that identifies a device is keyed by Tuya `device id`, never by IP.
 * Protocol detection order: discovery broadcast version → last working version → provider hint →

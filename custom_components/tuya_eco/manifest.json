@@ -8,7 +8,7 @@
   "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/thesydoruk/ha-tuya-eco/issues",
-  "loggers": ["custom_components.tuya_eco", "tinytuya", "tuya_sharing"],
-  "requirements": ["tinytuya>=1.17.0", "tuya-device-sharing-sdk>=0.2.1"],
+  "loggers": ["custom_components.tuya_eco", "tuya_sharing"],
+  "requirements": ["tuya-device-sharing-sdk>=0.2.1"],
   "version": "0.1.0"
 }

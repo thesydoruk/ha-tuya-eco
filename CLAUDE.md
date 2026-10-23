@@ -28,7 +28,8 @@
 ## Conventions
 
 - Python 3.12+, type hints everywhere, `from __future__ import annotations`.
-- All blocking I/O (tinytuya) goes through executor jobs; never block the event loop.
+- The LAN protocol is pure asyncio (`local/wire.py` + `local/protocol.py`); blocking SDK calls go through executor jobs. Never block the event loop.
+- No third-party Tuya LAN library: byte-compatibility is pinned by golden vectors in `tests/test_wire.py`.
 - Devices are keyed by Tuya device id, never by IP.
 - Providers must not import platform code; platforms must not import providers.
 - Lint with `ruff check` and `ruff format` before committing.

@@ -23,7 +23,8 @@ import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
-from tinytuya import PREFIX_6699_VALUE, REQ_DEVINFO, TuyaMessage, decrypt_udp, pack_message, udpkey
+
+from .wire import WireError, decode_udp, discovery_probe
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,12 +144,9 @@ class TuyaDiscovery:
     def handle_datagram(self, data: bytes, addr: tuple[str, int], port: int) -> None:
         """Decode one broadcast."""
         try:
-            text = decrypt_udp(data)
-        except Exception:  # noqa: BLE001
-            try:
-                text = data[20:-8].decode()
-            except Exception:  # noqa: BLE001
-                return
+            text = decode_udp(data)
+        except (WireError, UnicodeDecodeError, ValueError):
+            return
         try:
             payload = json.loads(text)
         except (TypeError, ValueError):
@@ -196,9 +194,7 @@ class TuyaDiscovery:
         broadcasts = await network.async_get_ipv4_broadcast_addresses(self.hass)
         if not broadcasts:
             broadcasts = {"255.255.255.255"}  # type: ignore[assignment]
-        payload = json.dumps({"from": "app", "ip": source_ip}).encode()
-        msg = TuyaMessage(0, REQ_DEVINFO, None, payload, 0, True, PREFIX_6699_VALUE, True)
-        packet = pack_message(msg, hmac_key=udpkey)
+        packet = discovery_probe(source_ip)
         await self.hass.async_add_executor_job(self._send_probe_sync, packet, [str(b) for b in broadcasts])
 
     def _send_probe_sync(self, packet: bytes, broadcasts: list[str]) -> None:

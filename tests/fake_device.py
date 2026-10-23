@@ -1,40 +1,22 @@
 """An asyncio emulation of a Tuya device for protocol versions 3.1 – 3.5.
 
-It speaks the real wire format (built with tinytuya's packing helpers) so that
-the integration's protocol code is exercised end-to-end over a TCP socket.
+It speaks the real wire format (built with the integration's own `wire` module,
+whose byte-compatibility with real devices is pinned by `test_wire.py` golden
+vectors) so that the protocol code is exercised end-to-end over a TCP socket.
 """
 
 from __future__ import annotations
 
 import asyncio
-from hashlib import sha256
-import hmac
+import base64
 import json
 import struct
 from typing import Any
 
-from tinytuya import (
-    CONTROL,
-    CONTROL_NEW,
-    DP_QUERY,
-    DP_QUERY_NEW,
-    HEART_BEAT,
-    PREFIX_55AA_VALUE,
-    PREFIX_6699_BIN,
-    PREFIX_6699_VALUE,
-    SESS_KEY_NEG_FINISH,
-    SESS_KEY_NEG_RESP,
-    SESS_KEY_NEG_START,
-    STATUS,
-    UPDATEDPS,
-    AESCipher,
-    TuyaMessage,
-    pack_message,
-    parse_header,
-    unpack_message,
-)
+from custom_components.tuya_eco.local import wire
+from custom_components.tuya_eco.local.wire import Cmd, Frame, WireError
 
-PROTOCOL_3x_HEADER = 12 * b"\x00"
+PROTOCOL_3x_HEADER = wire.PROTOCOL_3x_HEADER
 
 
 class FakeTuyaDevice:
@@ -53,6 +35,7 @@ class FakeTuyaDevice:
         self.answer_dp_query = True
         self.reply_to_control = True
         self.seqno = 1000
+        self._last_session_key = self.real_key
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -70,8 +53,6 @@ class FakeTuyaDevice:
     async def drop_connections(self) -> None:
         for writer in list(self.writers):
             writer.close()
-            with contextlib_suppress():
-                await writer.wait_closed()
         self.writers.clear()
 
     # ------------------------------------------------------------------ connection
@@ -88,20 +69,25 @@ class FakeTuyaDevice:
                 buffer += data
                 while buffer:
                     try:
-                        header = parse_header(buffer)
-                    except Exception:
+                        header = wire.parse_header(buffer)
+                    except WireError:
                         buffer = b""
                         break
                     if len(buffer) < header.total_length:
                         break
-                    frame, buffer = buffer[: header.total_length], buffer[header.total_length :]
-                    hmac_key = session_key if self.version >= 3.4 else None
-                    msg = unpack_message(frame, hmac_key=hmac_key, header=header, no_retcode=True)
+                    frame_bytes, buffer = buffer[: header.total_length], buffer[header.total_length :]
+                    key = session_key if self.version >= 3.4 else None
                     try:
-                        session_key = await self._process(msg, writer, session_key)
-                    except (ValueError, AssertionError, KeyError, UnicodeDecodeError):
+                        frame = wire.unpack(frame_bytes, key, header, has_retcode=False)
+                    except WireError:
+                        # wrong key on 3.5: GCM fails → drop the link like real firmware
+                        writer.close()
+                        return
+                    try:
+                        session_key = await self._process(frame, writer, session_key)
+                    except (WireError, ValueError, AssertionError, KeyError, UnicodeDecodeError):
                         # wrong key: real firmware answers with an error retcode (or drops the link)
-                        self._send(writer, msg.cmd, b"", session_key, msg.seqno, retcode=1)
+                        self._send(writer, frame.cmd, b"", session_key, frame.seqno, retcode=1)
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         finally:
@@ -109,45 +95,42 @@ class FakeTuyaDevice:
                 self.writers.remove(writer)
             writer.close()
 
-    async def _process(self, msg: TuyaMessage, writer: asyncio.StreamWriter, session_key: bytes) -> bytes:
-        if msg.cmd == SESS_KEY_NEG_START:
-            local_nonce = self._decrypt_raw(msg.payload, self.real_key)
+    async def _process(self, frame: Frame, writer: asyncio.StreamWriter, session_key: bytes) -> bytes:
+        if frame.cmd == Cmd.SESS_KEY_NEG_START:
+            local_nonce = self._decrypt_raw(frame.payload, self.real_key)
             self._client_nonce = local_nonce
             self._my_nonce = b"fedcba9876543210"
-            payload = self._my_nonce + hmac.new(self.real_key, local_nonce, sha256).digest()
-            self._send(writer, SESS_KEY_NEG_RESP, payload, self.real_key, msg.seqno, raw=True)
+            payload = self._my_nonce + wire.hmac_sha256(self.real_key, local_nonce)
+            self._send(writer, Cmd.SESS_KEY_NEG_RESP, payload, self.real_key, frame.seqno, raw=True)
             return self.real_key
-        if msg.cmd == SESS_KEY_NEG_FINISH:
-            expected = hmac.new(self.real_key, self._my_nonce, sha256).digest()
-            assert msg.payload == expected or self._decrypt_raw(msg.payload, self.real_key) == expected
-            xored = bytes(a ^ b for a, b in zip(self._client_nonce, self._my_nonce, strict=True))
-            cipher = AESCipher(self.real_key)
+        if frame.cmd == Cmd.SESS_KEY_NEG_FINISH:
+            expected = wire.hmac_sha256(self.real_key, self._my_nonce)
+            got = frame.payload if self.version >= 3.5 else self._decrypt_raw(frame.payload, self.real_key)
+            assert got == expected
             if self.version == 3.4:
-                return cipher.encrypt(xored, False, pad=False)
-            return cipher.encrypt(xored, use_base64=False, pad=False, iv=self._client_nonce[:12])[12:28]
+                return wire.session_key_34(self.real_key, self._client_nonce, self._my_nonce)
+            return wire.session_key_35(self.real_key, self._client_nonce, self._my_nonce)
 
-        body = self._decode(msg, session_key)
-        self.received.append((msg.cmd, body))
-        if msg.cmd == HEART_BEAT:
-            self._send(writer, HEART_BEAT, b"", session_key, msg.seqno)
-        elif msg.cmd in (DP_QUERY, DP_QUERY_NEW) or (
-            msg.cmd == CONTROL_NEW
+        body = self._decode(frame, session_key)
+        self.received.append((frame.cmd, body))
+        if frame.cmd == Cmd.HEART_BEAT:
+            self._send(writer, Cmd.HEART_BEAT, b"", session_key, frame.seqno)
+        elif frame.cmd in (Cmd.DP_QUERY, Cmd.DP_QUERY_NEW) or (
+            frame.cmd == Cmd.CONTROL_NEW
             and self.version < 3.4
             and "dps" in body
             and all(v is None for v in body["dps"].values())
         ):
             if self.answer_dp_query:
-                self._send(writer, msg.cmd, json.dumps({"dps": self.dps}).encode(), session_key, msg.seqno)
+                self._send(writer, frame.cmd, json.dumps({"dps": self.dps}).encode(), session_key, frame.seqno)
             else:
-                self._send(writer, msg.cmd, b"", session_key, msg.seqno, retcode=1)
-        elif msg.cmd in (CONTROL, CONTROL_NEW):
+                self._send(writer, frame.cmd, b"", session_key, frame.seqno, retcode=1)
+        elif frame.cmd in (Cmd.CONTROL, Cmd.CONTROL_NEW):
             new = body.get("dps") or body.get("data", {}).get("dps") or {}
             self.dps.update(new)
             if self.reply_to_control:
-                self._send(writer, msg.cmd, b"", session_key, msg.seqno)
+                self._send(writer, frame.cmd, b"", session_key, frame.seqno)
                 self.push(new, writer, session_key)
-        elif msg.cmd == UPDATEDPS:
-            pass
         return session_key
 
     # ------------------------------------------------------------------ helpers
@@ -156,32 +139,29 @@ class FakeTuyaDevice:
         self, dps: dict[str, Any], writer: asyncio.StreamWriter | None = None, session_key: bytes | None = None
     ) -> None:
         """Send an unsolicited STATUS frame."""
-        key = session_key or self._session_keys_for_push()
+        key = session_key or self._last_session_key
         payload = json.dumps({"dps": dps, "t": 0}).encode()
         for w in [writer] if writer else list(self.writers):
-            self._send(w, STATUS, payload, key, 0, with_header=self.version >= 3.3)
-
-    def _session_keys_for_push(self) -> bytes:
-        return getattr(self, "_last_session_key", self.real_key)
+            self._send(w, Cmd.STATUS, payload, key, 0, with_header=self.version >= 3.3)
 
     def _decrypt_raw(self, payload: bytes, key: bytes) -> bytes:
         if self.version >= 3.5:
-            return payload  # already decrypted by unpack_message (GCM)
-        return AESCipher(key).decrypt(payload, False, decode_text=False)
+            return payload  # already decrypted by unpack (GCM)
+        return wire.aes_ecb_decrypt(key, payload)
 
-    def _decode(self, msg: TuyaMessage, session_key: bytes) -> dict[str, Any]:
-        payload = msg.payload
+    def _decode(self, frame: Frame, session_key: bytes) -> dict[str, Any]:
+        payload = frame.payload
         if self.version == 3.4:
-            payload = AESCipher(session_key).decrypt(payload, False, decode_text=False)
+            payload = wire.aes_ecb_decrypt(session_key, payload)
         if self.version >= 3.4:
             if payload.startswith(self.version_bytes):
                 payload = payload[15:]
         elif self.version >= 3.2:
             if payload.startswith(self.version_bytes):
                 payload = payload[15:]
-            payload = AESCipher(self.real_key).decrypt(payload, False, decode_text=False)
+            payload = wire.aes_ecb_decrypt(self.real_key, payload)
         elif payload.startswith(b"3.1"):
-            payload = AESCipher(self.real_key).decrypt(payload[3 + 16 :], decode_text=False)
+            payload = wire.aes_ecb_decrypt(self.real_key, base64.b64decode(payload[3 + 16 :]))
         if not payload:
             return {}
         return json.loads(payload)
@@ -203,41 +183,20 @@ class FakeTuyaDevice:
             if payload and with_header:
                 payload = self.version_bytes + PROTOCOL_3x_HEADER + payload
             self.seqno += 1
-            msg = TuyaMessage(self.seqno, cmd, retcode, payload, 0, True, PREFIX_6699_VALUE, True)
-            writer.write(pack_message(msg, hmac_key=key))
+            writer.write(wire.pack_6699(self.seqno, cmd, payload, key, retcode=retcode))
             return
         if self.version == 3.4:
             if payload:
                 if with_header:
                     payload = self.version_bytes + PROTOCOL_3x_HEADER + payload
-                payload = AESCipher(key).encrypt(payload, False)
-            frame_payload = struct.pack(">I", retcode) + payload
-            msg = TuyaMessage(seqno, cmd, 0, frame_payload, 0, True, PREFIX_55AA_VALUE, False)
-            writer.write(pack_message(msg, hmac_key=key))
+                payload = wire.aes_ecb_encrypt(key, payload)
+            writer.write(wire.pack_55aa(seqno, cmd, struct.pack(">I", retcode) + payload, hmac_key=key))
             return
         if payload and not raw and self.version >= 3.2:
-            payload = AESCipher(self.real_key).encrypt(payload, False)
+            payload = wire.aes_ecb_encrypt(self.real_key, payload)
             if with_header:
                 payload = self.version_bytes + PROTOCOL_3x_HEADER + payload
-        frame_payload = struct.pack(">I", retcode) + payload
-        msg = TuyaMessage(seqno, cmd, 0, frame_payload, 0, True, PREFIX_55AA_VALUE, False)
-        writer.write(pack_message(msg))
+        writer.write(wire.pack_55aa(seqno, cmd, struct.pack(">I", retcode) + payload))
 
 
-class contextlib_suppress:
-    """Tiny async-safe suppress for close errors."""
-
-    async def __aenter__(self) -> None:
-        return None
-
-    async def __aexit__(self, *exc: object) -> bool:
-        return True
-
-    def __enter__(self) -> None:
-        return None
-
-    def __exit__(self, *exc: object) -> bool:
-        return True
-
-
-__all__ = ["PREFIX_6699_BIN", "FakeTuyaDevice"]
+__all__ = ["FakeTuyaDevice"]
