@@ -37,6 +37,8 @@ class FakeTuyaDevice:
         self.answer_dp_query = True
         self.reply_to_control = True
         self.seqno = 1000
+        # Some 3.4 firmwares (and all 3.5) answer with their own sequence counter.
+        self.global_seqno = version >= 3.5
         self._last_session_key = self.real_key
 
     # ------------------------------------------------------------------ lifecycle
@@ -200,6 +202,9 @@ class FakeTuyaDevice:
             self.seqno += 1
             writer.write(wire.pack_6699(self.seqno, cmd, payload, key, retcode=retcode))
             return
+        if self.global_seqno:
+            self.seqno += 1
+            seqno = self.seqno
         if self.version == 3.4:
             if payload:
                 if with_header:

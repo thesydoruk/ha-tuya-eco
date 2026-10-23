@@ -199,8 +199,9 @@ class TuyaLanProtocol(asyncio.Protocol):
             pending = self._pending.pop(_SEQ_HEARTBEAT, None)
         elif frame.seqno in self._pending:
             pending = self._pending.pop(frame.seqno)
-        elif self.version >= 3.5:
-            # 3.5 devices reply with their own global seqno: match by command.
+        else:
+            # Many devices (all 3.5, and some 3.4 firmwares) reply with their own
+            # global sequence counter instead of echoing ours: match by command.
             for seq, cand in list(self._pending.items()):
                 if cand.cmd == frame.cmd:
                     pending = self._pending.pop(seq)

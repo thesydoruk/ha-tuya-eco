@@ -138,3 +138,22 @@ async def test_gateway_sub_device(version: float) -> None:
         await gw.close()
     finally:
         await gateway.stop()
+
+
+@pytest.mark.parametrize("version", [3.3, 3.4])
+async def test_device_with_global_sequence_numbers(version: float) -> None:
+    """Regression: an RGB strip (3.4) answered with its own seqno counter and status timed out."""
+    fake = FakeTuyaDevice(DEVICE_ID, KEY, version)
+    fake.global_seqno = True
+    await fake.start()
+    rec = Recorder()
+    try:
+        link = await connect("127.0.0.1", DEVICE_ID, KEY, version, rec, port=fake.port)
+        assert await link.status() == {"1": True, "2": 50}
+        await link.set_dps({"1": False})
+        await asyncio.wait_for(rec.event.wait(), 2)
+        assert fake.dps["1"] is False
+        await link.heartbeat()
+        await link.close()
+    finally:
+        await fake.stop()
