@@ -1,0 +1,102 @@
+"""Hub tests through a real config entry (manual provider, no network)."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, patch
+
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.tuya_eco.const import CONF_PROVIDER, CONF_PROVIDER_DATA, DOMAIN
+from custom_components.tuya_eco.providers.base import CloudDevice
+
+DEV_A = "bf0000000000000000a1"
+DEV_B = "bf0000000000000000b2"
+
+
+def _entry() -> MockConfigEntry:
+    return MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"manual:{DEV_A}",
+        data={
+            CONF_PROVIDER: "manual",
+            CONF_PROVIDER_DATA: {
+                "devices": [
+                    {
+                        "device_id": DEV_A,
+                        "local_key": "0123456789abcdef",
+                        "name": "Plug A",
+                        "host": "192.0.2.1",
+                        "protocol_version": "3.3",
+                    },
+                    {
+                        "device_id": DEV_B,
+                        "local_key": "0123456789abcdef",
+                        "name": "Plug B",
+                        "host": "192.0.2.2",
+                        "protocol_version": "3.3",
+                    },
+                ]
+            },
+        },
+    )
+
+
+async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    entry.add_to_hass(hass)
+    # No UDP sockets and no real TCP attempts in this test.
+    with (
+        patch("custom_components.tuya_eco.local.discovery.TuyaDiscovery._async_start", AsyncMock()),
+        patch("custom_components.tuya_eco.local.discovery.TuyaDiscovery._async_stop", AsyncMock()),
+        patch("custom_components.tuya_eco.local.device.EcoDevice.async_start", AsyncMock()),
+        patch("custom_components.tuya_eco.local.device.EcoDevice.async_stop", AsyncMock()),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_devices_removed_from_account_are_removed(hass: HomeAssistant) -> None:
+    entry = _entry()
+    await _setup(hass, entry)
+    hub = entry.runtime_data
+    registry = dr.async_get(hass)
+    assert set(hub.devices) == {DEV_A, DEV_B}
+    assert registry.async_get_device(identifiers={(DOMAIN, DEV_B)}) is not None
+
+    # The account now only lists device A.
+    only_a = [CloudDevice(id=DEV_A, name="Plug A", local_key="0123456789abcdef", ip="192.0.2.1")]
+    with (
+        patch.object(hub.provider, "async_fetch_devices", AsyncMock(return_value=only_a)),
+        patch("custom_components.tuya_eco.local.device.EcoDevice.async_stop", AsyncMock()),
+    ):
+        assert await hub.async_refresh_cloud(force=True)
+    await hass.async_block_till_done()
+
+    assert set(hub.devices) == {DEV_A}
+    assert DEV_B not in hub.cloud_devices
+    assert registry.async_get_device(identifiers={(DOMAIN, DEV_B)}) is None
+    assert registry.async_get_device(identifiers={(DOMAIN, DEV_A)}) is not None
+
+
+async def test_empty_cloud_list_does_not_wipe_devices(hass: HomeAssistant) -> None:
+    entry = _entry()
+    await _setup(hass, entry)
+    hub = entry.runtime_data
+    with patch.object(hub.provider, "async_fetch_devices", AsyncMock(return_value=[])):
+        assert await hub.async_refresh_cloud(force=True)
+    assert set(hub.devices) == {DEV_A, DEV_B}
+
+
+async def test_remove_device_from_ui(hass: HomeAssistant) -> None:
+    from custom_components.tuya_eco import async_remove_config_entry_device
+
+    entry = _entry()
+    await _setup(hass, entry)
+    hub = entry.runtime_data
+    registry = dr.async_get(hass)
+    reg_entry = registry.async_get_device(identifiers={(DOMAIN, DEV_B)})
+    assert reg_entry is not None
+    with patch("custom_components.tuya_eco.local.device.EcoDevice.async_stop", AsyncMock()):
+        assert await async_remove_config_entry_device(hass, entry, reg_entry)
+    assert DEV_B not in hub.devices

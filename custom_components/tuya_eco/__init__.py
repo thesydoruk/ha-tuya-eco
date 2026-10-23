@@ -6,6 +6,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntry
 
 from .const import DOMAIN, PLATFORMS
 from .hub import EcoHub
@@ -34,6 +35,19 @@ async def _async_options_updated(hass: HomeAssistant, entry: EcoConfigEntry) -> 
     snapshot = hass.data.get(DOMAIN, {}).get("options_snapshot_" + entry.entry_id)
     if snapshot != dict(entry.options):
         await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: EcoConfigEntry, device_entry: DeviceEntry
+) -> bool:
+    """Allow deleting a device from the UI; it comes back only if the cloud still lists it."""
+    hub = entry.runtime_data
+    for domain, dev_id in device_entry.identifiers:
+        if domain == DOMAIN:
+            if dev_id in hub.cloud_devices:
+                _LOGGER.info("%s removed from the UI; it will reappear if it is still in the cloud account", dev_id)
+            await hub.async_remove_device(dev_id)
+    return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: EcoConfigEntry) -> bool:

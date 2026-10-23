@@ -247,11 +247,12 @@ class EcoHub:
                 return False
             self._last_cloud_refresh = time.monotonic()
             self.last_cloud_error = None
-            self._apply_cloud_devices(devices)
+            await self._async_apply_cloud_devices(devices)
             return True
 
-    def _apply_cloud_devices(self, devices: list[CloudDevice]) -> None:
+    async def _async_apply_cloud_devices(self, devices: list[CloudDevice]) -> None:
         new_ids: list[str] = []
+        seen = {info.id for info in devices}
         for info in devices:
             previous = self.cloud_devices.get(info.id)
             if previous and not info.dp_schema:
@@ -268,10 +269,33 @@ class EcoHub:
                 if device:
                     new_ids.append(info.id)
                     self.hass.async_create_task(device.async_start())
-        # devices whose cloud entry disappeared keep running on cached data.
+        # Devices that disappeared from the account are removed (with their entities).
+        # An empty list while we knew devices is treated as a glitch, not as "all removed".
+        gone = [dev_id for dev_id in self.cloud_devices if dev_id not in seen]
+        if gone and seen:
+            for dev_id in gone:
+                await self.async_remove_device(dev_id)
+        elif gone:
+            _LOGGER.warning("%s: cloud returned no devices; keeping the %d cached ones", self.entry.title, len(gone))
         self._schedule_persist()
         if new_ids:
             async_dispatcher_send(self.hass, f"{SIGNAL_NEW_DEVICES}_{self.entry.entry_id}", new_ids)
+
+    async def async_remove_device(self, dev_id: str) -> None:
+        """Forget a device: stop its link, drop caches, remove it from the device registry."""
+        info = self.cloud_devices.pop(dev_id, None)
+        device = self.devices.pop(dev_id, None)
+        if device is not None:
+            await device.async_stop()
+        self._entity_defs.pop(dev_id, None)
+        self._hosts.pop(dev_id, None)
+        self._versions.pop(dev_id, None)
+        registry = dr.async_get(self.hass)
+        reg_entry = registry.async_get_device(identifiers={(DOMAIN, dev_id)})
+        if reg_entry is not None:
+            registry.async_update_device(reg_entry.id, remove_config_entry_id=self.entry.entry_id)
+        _LOGGER.info("%s: removed device %s (%s)", self.entry.title, info.name if info else dev_id, dev_id)
+        self._schedule_persist()
 
     async def async_send_cloud(self, device: EcoDevice, dps: dict[int | str, Any]) -> bool:
         """Cloud fallback for a command expressed as DP ids."""
