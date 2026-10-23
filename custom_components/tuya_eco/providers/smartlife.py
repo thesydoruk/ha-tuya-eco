@@ -209,7 +209,8 @@ class SmartLifeProvider(BaseProvider):
                 if not self.home_selected(home.id):
                     continue
                 for device in manager.device_repository.query_devices_by_home(home.id):
-                    device.home_id = home.id
+                    device.home_id = str(home.id)
+                    device.home_name = str(home.name)
                     manager.device_map[device.id] = device
         except requests.RequestException as err:
             raise ProviderError(f"cloud unreachable: {err}") from err
@@ -284,6 +285,8 @@ class SmartLifeProvider(BaseProvider):
             uuid=getattr(device, "uuid", "") or "",
             node_id=getattr(device, "node_id", "") or getattr(device, "nodeId", "") or "",
             gateway_id=getattr(device, "gateway_id", "") or getattr(device, "gatewayId", "") or "",
+            home_id=getattr(device, "home_id", "") or "",
+            home_name=getattr(device, "home_name", "") or "",
             dp_schema=dp_schema,
             status=dict(getattr(device, "status", {}) or {}),
         )

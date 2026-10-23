@@ -378,7 +378,7 @@ def parse_mobile_schema(raw_schema: Any) -> dict[int, DpSpec]:
     return result
 
 
-def convert_mobile_device(raw: dict[str, Any]) -> CloudDevice:
+def convert_mobile_device(raw: dict[str, Any], home_id: str = "", home_name: str = "") -> CloudDevice:
     """Convert a raw mobile-API device dict to CloudDevice."""
     schema = parse_mobile_schema(raw.get("schema"))
     code_by_dp = {dp: spec.code for dp, spec in schema.items()}
@@ -407,6 +407,8 @@ def convert_mobile_device(raw: dict[str, Any]) -> CloudDevice:
         uuid=str(raw.get("uuid") or ""),
         node_id=str(raw.get("nodeId") or "") if gw_id != dev_id else "",
         gateway_id=gw_id if gw_id != dev_id else "",
+        home_id=home_id,
+        home_name=home_name,
         dp_schema=schema,
         status=status,
         protocol_version=str(version) if version else None,
@@ -546,7 +548,7 @@ class TuyaOemProvider(BaseProvider):
                 continue
             for raw in await api.devices(str(gid)):
                 try:
-                    devices.append(convert_mobile_device(raw))
+                    devices.append(convert_mobile_device(raw, str(gid), str(group.get("name") or gid)))
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.warning("Skipping device %s: %s", raw.get("devId"), err)
         self._cache = devices

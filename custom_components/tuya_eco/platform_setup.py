@@ -33,7 +33,8 @@ def async_setup_platform_entities(
 
     @callback
     def _add(device_ids: list[str]) -> None:
-        entities: list[Entity] = []
+        # Entities are added per home subentry so the UI groups them with their device.
+        groups: dict[str | None, list[Entity]] = {}
         for device_id in device_ids:
             device = hub.devices.get(device_id)
             if device is None:
@@ -45,9 +46,15 @@ def async_setup_platform_entities(
                 if uid in created:
                     continue
                 created.add(uid)
-                entities.append(factory(hub, device, definition))
-        if entities:
-            async_add_entities(entities)
+                groups.setdefault(hub.subentry_for(device), []).append(factory(hub, device, definition))
+        for subentry_id, entities in groups.items():
+            if subentry_id is None:
+                async_add_entities(entities)
+                continue
+            try:
+                async_add_entities(entities, config_subentry_id=subentry_id)
+            except TypeError:  # Home Assistant < 2025.3
+                async_add_entities(entities)
 
     _add(list(hub.devices))
     entry.async_on_unload(async_dispatcher_connect(hass, f"{SIGNAL_NEW_DEVICES}_{entry.entry_id}", _add))

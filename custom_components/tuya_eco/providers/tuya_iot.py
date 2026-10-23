@@ -142,6 +142,8 @@ class TuyaIotProvider(BaseProvider):
                     uuid=str(raw.get("uuid") or ""),
                     node_id=str(raw.get("node_id") or ""),
                     gateway_id=str(raw.get("gateway_id") or raw.get("owner_id_gateway") or ""),
+                    home_id=str(raw.get("owner_id") or ""),
+                    home_name=f"Home {raw.get('owner_id')}" if raw.get("owner_id") else "",
                     dp_schema=dict(schema),
                     status={
                         s["code"]: s.get("value")

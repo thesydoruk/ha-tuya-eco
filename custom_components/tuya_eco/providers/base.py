@@ -93,6 +93,8 @@ class CloudDevice:
     uuid: str = ""
     node_id: str = ""  # sub-device id for zigbee/ble children behind a gateway
     gateway_id: str = ""
+    home_id: str = ""  # home / location the device belongs to (groups devices in the UI)
+    home_name: str = ""
     dp_schema: dict[int, DpSpec] = field(default_factory=dict)
     status: dict[str, Any] = field(default_factory=dict)
     protocol_version: str | None = None  # hint from provider, if known
@@ -118,6 +120,8 @@ class CloudDevice:
             "uuid": self.uuid,
             "node_id": self.node_id,
             "gateway_id": self.gateway_id,
+            "home_id": self.home_id,
+            "home_name": self.home_name,
             "dp_schema": [spec.as_dict() for spec in self.dp_schema.values()],
             "status": self.status,
             "protocol_version": self.protocol_version,
@@ -144,6 +148,8 @@ class CloudDevice:
             uuid=str(data.get("uuid") or ""),
             node_id=str(data.get("node_id") or ""),
             gateway_id=str(data.get("gateway_id") or ""),
+            home_id=str(data.get("home_id") or ""),
+            home_name=str(data.get("home_name") or ""),
             dp_schema=schema,
             status=dict(data.get("status") or {}),
             protocol_version=data.get("protocol_version"),

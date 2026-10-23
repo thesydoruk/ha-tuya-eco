@@ -14,3 +14,4 @@ htmlcov/
 .vscode/
 *.log
 .secrets*
+.venv313/

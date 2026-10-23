@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
+import inspect
 import logging
 import time
+from types import MappingProxyType
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+
+try:  # Home Assistant ≥ 2025.3
+    from homeassistant.config_entries import ConfigSubentry
+except ImportError:  # pragma: no cover - older cores
+    ConfigSubentry = None  # type: ignore[assignment,misc]
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -77,6 +84,8 @@ class EcoHub:
         self.last_cloud_error: str | None = None
         # Devices skipped because another tuya_eco entry already controls them: id → that entry's title.
         self.conflicts: dict[str, str] = {}
+        # home id → config subentry id (one subentry per home groups devices in the UI)
+        self._subentry_by_home: dict[str, str] = {}
 
     # ------------------------------------------------------------------ options
 
@@ -124,6 +133,7 @@ class EcoHub:
             _LOGGER.warning("%s: cloud unavailable (%s); using cached devices", self.entry.title, err)
 
         await self.hass.async_add_executor_job(preload_profiles)
+        self._async_sync_home_subentries()
         await self.discovery.async_acquire()
         for info in sorted(self.cloud_devices.values(), key=lambda i: bool(i.gateway_id)):
             self._ensure_device(info)
@@ -244,7 +254,10 @@ class EcoHub:
             gateway = registry.async_get_device(identifiers={(DOMAIN, info.gateway_id)})
             if gateway is not None:
                 extra["via_device_id"] = gateway.id
-        registry.async_get_or_create(
+        subentry_id = self._subentry_by_home.get(info.home_id) if info.home_id else None
+        if subentry_id:
+            extra["config_subentry_id"] = subentry_id
+        device_entry = registry.async_get_or_create(
             config_entry_id=self.entry.entry_id,
             identifiers={(DOMAIN, info.id)},
             manufacturer=self.provider.name.split(" (")[0],
@@ -253,6 +266,64 @@ class EcoHub:
             name=info.name,
             **extra,
         )
+        self._async_move_to_subentry(registry, device_entry, subentry_id)
+
+    def subentry_for(self, device: EcoDevice) -> str | None:
+        """Config subentry (home) a device's entities belong to."""
+        return self._subentry_by_home.get(device.info.home_id) if device.info.home_id else None
+
+    @callback
+    def _async_sync_home_subentries(self, devices: list[CloudDevice] | None = None) -> None:
+        """One config subentry per home so the integration page groups devices by home.
+
+        Subentries exist since Home Assistant 2025.3; older cores keep a flat list.
+        """
+        if ConfigSubentry is None or not hasattr(self.hass.config_entries, "async_add_subentry"):
+            return
+        source = devices if devices is not None else list(self.cloud_devices.values())
+        homes: dict[str, str] = {}
+        for info in source:
+            if info.home_id:
+                homes[info.home_id] = info.home_name or f"Home {info.home_id}"
+        if not homes:
+            return
+        existing = {sub.unique_id: sub for sub in self.entry.subentries.values() if sub.subentry_type == "home"}
+        for home_id, name in homes.items():
+            sub = existing.get(home_id)
+            if sub is None:
+                sub = ConfigSubentry(data=MappingProxyType({}), subentry_type="home", title=name, unique_id=home_id)
+                self.hass.config_entries.async_add_subentry(self.entry, sub)
+            elif sub.title != name:
+                self.hass.config_entries.async_update_subentry(self.entry, sub, title=name)
+            self._subentry_by_home[home_id] = sub.subentry_id
+        for home_id, sub in existing.items():
+            if home_id not in homes and home_id is not None:
+                self.hass.config_entries.async_remove_subentry(self.entry, sub.subentry_id)
+                self._subentry_by_home.pop(home_id, None)
+
+    def _async_move_to_subentry(self, registry: dr.DeviceRegistry, device_entry: Any, subentry_id: str | None) -> None:
+        """Make sure an already registered device sits in its home's subentry.
+
+        Works with both device models: the single-owner one (``config_subentry_id`` +
+        ``new_config_subentry_id``, HA ≥ 2026.8) and the older link set.
+        """
+        if subentry_id is None:
+            return
+        try:
+            if (
+                hasattr(device_entry, "config_subentry_id")
+                and "new_config_subentry_id" in inspect.signature(registry.async_update_device).parameters
+            ):
+                if device_entry.config_subentry_id != subentry_id:
+                    registry.async_update_device(device_entry.id, new_config_subentry_id=subentry_id)
+                return
+            links = getattr(device_entry, "config_entries_subentries", {}).get(self.entry.entry_id, set())
+            if None in links and subentry_id in links:
+                registry.async_update_device(
+                    device_entry.id, remove_config_entry_id=self.entry.entry_id, remove_config_subentry_id=None
+                )
+        except Exception as err:  # noqa: BLE001 - grouping is cosmetic, never break setup
+            _LOGGER.debug("%s: could not move device to its home subentry: %s", device_entry.id, err)
 
     def entity_defs(self, device: EcoDevice) -> list[EntityDef]:
         """Entity definitions for a device (cached)."""
@@ -331,6 +402,11 @@ class EcoHub:
         seen = {info.id for info in devices}
         for info in devices:
             previous = self.cloud_devices.get(info.id)
+            if previous and not info.home_id:
+                info.home_id, info.home_name = previous.home_id, previous.home_name
+        self._async_sync_home_subentries(devices)
+        for info in devices:
+            previous = self.cloud_devices.get(info.id)
             if previous and not info.dp_schema:
                 info.dp_schema = previous.dp_schema
             self.cloud_devices[info.id] = info
@@ -369,7 +445,7 @@ class EcoHub:
         registry = dr.async_get(self.hass)
         reg_entry = registry.async_get_device(identifiers={(DOMAIN, dev_id)})
         if reg_entry is not None:
-            registry.async_update_device(reg_entry.id, remove_config_entry_id=self.entry.entry_id)
+            registry.async_remove_device(reg_entry.id)
         _LOGGER.info("%s: removed device %s (%s)", self.entry.title, info.name if info else dev_id, dev_id)
         self._schedule_persist()
 

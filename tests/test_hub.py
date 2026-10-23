@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.tuya_eco.const import CONF_PROVIDER, CONF_PROVIDER_DATA, DOMAIN
@@ -218,3 +219,42 @@ async def test_device_shared_by_two_entries_is_controlled_once(hass: HomeAssista
     await hass.async_block_till_done()
     assert DEV_B in hub2.devices
     assert DEV_B not in hub2.conflicts
+
+
+async def test_devices_grouped_by_home_subentries(hass: HomeAssistant) -> None:
+    pytest.importorskip("homeassistant.config_entries", reason="subentries need HA 2025.3+")
+    from homeassistant import config_entries as ce
+
+    if not hasattr(ce, "ConfigSubentry"):
+        pytest.skip("subentries need HA 2025.3+")
+    from custom_components.tuya_eco.const import CONF_DEVICES_CACHE
+
+    entry = _entry()
+    cached = [
+        CloudDevice(id=DEV_A, name="Plug A", local_key="0123456789abcdef", home_id="h1", home_name="Kyiv flat"),
+        CloudDevice(id=DEV_B, name="Plug B", local_key="0123456789abcdef", home_id="h2", home_name="Dacha"),
+    ]
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, CONF_DEVICES_CACHE: [d.as_dict() for d in cached]}
+    )
+    await _setup(hass, entry)
+
+    subs = {sub.unique_id: sub for sub in entry.subentries.values()}
+    assert {sid: s.title for sid, s in subs.items()} == {"h1": "Kyiv flat", "h2": "Dacha"}
+    assert all(s.subentry_type == "home" for s in subs.values())
+
+    registry = dr.async_get(hass)
+    dev_a = registry.async_get_device(identifiers={(DOMAIN, DEV_A)})
+    dev_b = registry.async_get_device(identifiers={(DOMAIN, DEV_B)})
+    assert dev_a is not None and dev_b is not None
+
+    def _subentries_of(dev):
+        if getattr(dev, "config_subentry_id", None) is not None:
+            return {dev.config_subentry_id}
+        return set(dev.config_entries_subentries.get(entry.entry_id, set()))
+
+    assert _subentries_of(dev_a) == {subs["h1"].subentry_id}
+    assert _subentries_of(dev_b) == {subs["h2"].subentry_id}
+    hub = entry.runtime_data
+    assert hub.subentry_for(hub.devices[DEV_A]) == subs["h1"].subentry_id
