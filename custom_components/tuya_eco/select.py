@@ -35,7 +35,11 @@ class EcoSelect(EcoEntity, SelectEntity):
         if value is None:
             return None
         text = str(value)
-        return text if text in self._attr_options else None
+        if text not in self._attr_options:
+            # Some devices report values the cloud schema does not list (e.g. "off"
+            # instead of "power_off"): expose them rather than showing "unknown".
+            self._attr_options = [*self._attr_options, text]
+        return text
 
     async def async_select_option(self, option: str) -> None:
         """Write."""
