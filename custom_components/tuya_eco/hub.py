@@ -35,6 +35,7 @@ from .const import (
 from .local.device import EcoDevice
 from .local.discovery import TuyaDiscovery
 from .mapping import EntityDef, build_entities, synthesize_schema
+from .mapping.profiles import preload_profiles
 from .providers.base import BaseProvider, CloudDevice, ProviderAuthError, ProviderError
 from .providers.registry import get_provider_class
 
@@ -112,8 +113,9 @@ class EcoHub:
                 raise ConfigEntryNotReady(f"cloud unavailable and no cached devices: {err}") from err
             _LOGGER.warning("%s: cloud unavailable (%s); using cached devices", self.entry.title, err)
 
+        await self.hass.async_add_executor_job(preload_profiles)
         await self.discovery.async_acquire()
-        for info in self.cloud_devices.values():
+        for info in sorted(self.cloud_devices.values(), key=lambda i: bool(i.gateway_id)):
             self._ensure_device(info)
         await asyncio.gather(*(d.async_start() for d in self.devices.values()))
 
@@ -169,6 +171,11 @@ class EcoHub:
 
     def _register_device(self, info: CloudDevice) -> None:
         registry = dr.async_get(self.hass)
+        extra: dict[str, Any] = {}
+        if info.gateway_id:
+            gateway = registry.async_get_device(identifiers={(DOMAIN, info.gateway_id)})
+            if gateway is not None:
+                extra["via_device_id"] = gateway.id
         registry.async_get_or_create(
             config_entry_id=self.entry.entry_id,
             identifiers={(DOMAIN, info.id)},
@@ -176,7 +183,7 @@ class EcoHub:
             model=info.product_name or info.product_id or None,
             model_id=info.product_id or None,
             name=info.name,
-            via_device=(DOMAIN, info.gateway_id) if info.gateway_id else None,
+            **extra,
         )
 
     def entity_defs(self, device: EcoDevice) -> list[EntityDef]:

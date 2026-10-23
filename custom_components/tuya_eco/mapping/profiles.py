@@ -71,6 +71,11 @@ def _parse_entity(item: dict[str, Any]) -> EntityDef:
     )
 
 
+def preload_profiles() -> int:
+    """Read the YAML profiles (blocking I/O; call from an executor). Returns the product count."""
+    return len(_load_all())
+
+
 def profile_entities(device: CloudDevice) -> list[EntityDef] | None:
     """Return the profile for the device's product id, if one exists."""
     if not device.product_id:

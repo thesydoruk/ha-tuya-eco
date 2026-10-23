@@ -17,8 +17,6 @@ from homeassistant.components.number import NumberDeviceClass
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.components.switch import SwitchDeviceClass
 from homeassistant.const import (
-    CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
-    CONCENTRATION_PARTS_PER_MILLION,
     LIGHT_LUX,
     PERCENTAGE,
     EntityCategory,
@@ -107,8 +105,9 @@ _T = UnitOfTemperature
 _P = PERCENTAGE
 _DIAG = EntityCategory.DIAGNOSTIC
 _CFG = EntityCategory.CONFIG
-_UG = CONCENTRATION_MICROGRAMS_PER_CUBIC_METER
-_PPM = CONCENTRATION_PARTS_PER_MILLION
+# Literal units: the named constants were renamed across HA versions (UnitOfDensity / UnitOfRatio).
+_UG = "μg/m³"
+_PPM = "ppm"
 _M = SensorStateClass.MEASUREMENT
 _TI = SensorStateClass.TOTAL_INCREASING
 
