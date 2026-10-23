@@ -54,6 +54,7 @@ def build_en() -> dict[str, dict[str, dict]]:
             continue
         put("sensor", code, _name(rule, code))
     put("sensor", "bright_value", "Illuminance")
+    put("sensor", "connection", "Connection", {"local": "Local", "cloud": "Cloud", "offline": "Offline"})
     for code, rule in C.BUTTONS.items():
         put("button", code, _name(rule, code))
     put("button", "snooze", "Snooze")

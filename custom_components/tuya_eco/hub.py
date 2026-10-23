@@ -248,6 +248,7 @@ class EcoHub(PushListener):
             on_key_invalid=self._device_key_invalid,
             on_host_changed=self._device_host_changed,
         )
+        device.cloud_backup = self.cloud_fallback and self.provider.supports_push
         self.devices[info.id] = device
         device.async_add_listener(lambda dev=device: self._device_state_changed(dev))
         self._register_device(info)
@@ -420,6 +421,8 @@ class EcoHub(PushListener):
             previous = self.cloud_devices.get(info.id)
             if previous and not info.home_id:
                 info.home_id, info.home_name = previous.home_id, previous.home_name
+            if previous and info.online is None:
+                info.online = previous.online
         self._async_sync_home_subentries(devices)
         for info in devices:
             previous = self.cloud_devices.get(info.id)
@@ -482,6 +485,16 @@ class EcoHub(PushListener):
         self._schedule_persist()
 
     @callback
+    def push_device_online(self, device_id: str, online: bool) -> None:
+        """Cloud online/offline: drives availability while the LAN link is down."""
+        device = self.devices.get(device_id)
+        if device is not None:
+            device.set_cloud_online(online)
+        info = self.cloud_devices.get(device_id)
+        if info is not None:
+            info.online = online
+
+    @callback
     def push_device_report(self, device_id: str, values: dict[str, Any]) -> None:
         """Cloud state report: used only while the LAN link is down."""
         device = self.devices.get(device_id)
@@ -520,7 +533,11 @@ class EcoHub(PushListener):
             if spec is None:
                 return False
             commands.append({"code": spec.code, "value": value})
-        return await self.provider.async_send_cloud_command(device.id, commands)
+        ok = await self.provider.async_send_cloud_command(device.id, commands)
+        if ok:
+            # Optimistic: the cloud confirms through its push channel (or the next poll).
+            device.apply_cloud_report({str(dp): value for dp, value in dps.items()})
+        return ok
 
     # ------------------------------------------------------------------ persistence
 

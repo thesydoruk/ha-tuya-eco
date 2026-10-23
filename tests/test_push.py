@@ -96,3 +96,60 @@ async def test_hub_handles_push_events(hass: HomeAssistant) -> None:
         hub.push_device_removed(DEV_B)
         await hass.async_block_till_done()
     assert DEV_B not in hub.devices
+
+
+async def test_cloud_backup_availability(hass: HomeAssistant) -> None:
+    """With a push provider, a LAN-unreachable device stays available while the cloud says online."""
+    from custom_components.tuya_eco.const import CONF_DEVICES_CACHE
+    from custom_components.tuya_eco.providers.base import CloudDevice, DpSpec, DpType
+
+    entry = _entry()
+    cached = CloudDevice(
+        id=DEV_A,
+        name="Plug A",
+        local_key="0123456789abcdef",
+        category="cz",
+        online=True,
+        dp_schema={1: DpSpec(1, "switch_1", DpType.BOOLEAN)},
+    )
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_DEVICES_CACHE: [cached.as_dict()]})
+    await _setup(hass, entry)
+    hub = entry.runtime_data
+    device = hub.devices[DEV_A]
+
+    # the manual provider has no push channel: no cloud backup, LAN only
+    assert device.cloud_backup is False
+    assert not device.available and device.transport == "offline"
+
+    # simulate a push provider: the device becomes available through the cloud
+    device.cloud_backup = True
+    assert device.available and device.transport == "cloud"
+    hub.push_device_online(DEV_A, False)
+    assert not device.available
+    hub.push_device_online(DEV_A, True)
+    assert device.available
+
+    # a LAN link wins over the cloud
+    device.lan_available = True
+    assert device.transport == "local"
+
+    # a successful cloud command is applied optimistically
+    with patch.object(hub.provider, "async_send_cloud_command", AsyncMock(return_value=True)):
+        assert await hub.async_send_cloud(device, {1: False})
+    assert device.dps["1"] is False
+
+
+async def test_smartlife_listener_reports_online_events() -> None:
+    hass = SimpleNamespace(loop=asyncio.get_running_loop())
+    provider = SmartLifeProvider(hass)  # type: ignore[arg-type]
+    rec = Recorder()
+    rec.online: list[tuple[str, bool]] = []  # type: ignore[attr-defined]
+    rec.push_device_online = lambda dev_id, online: rec.online.append((dev_id, online))  # type: ignore[method-assign]
+    provider._push_listener = rec
+    listener = provider._get_sdk_listener()
+    await asyncio.to_thread(
+        listener.update_device, SimpleNamespace(id=DEV_A, name="Plug A", online=False, status={}), None, None
+    )
+    await asyncio.sleep(0.05)
+    assert rec.online == [(DEV_A, False)]

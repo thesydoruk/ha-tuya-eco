@@ -294,3 +294,13 @@ def test_unknown_codes_keep_their_english_name() -> None:
     mystery = next(d for d in build_entities(device) if d.key == "mystery_flag")
     assert mystery.translation_key is None
     assert mystery.name == "Mystery flag"
+
+
+def test_every_device_gets_a_connection_sensor() -> None:
+    device = _dev("cz", [(1, "switch", DpType.BOOLEAN, {}, False)])
+    conn = [d for d in build_entities(device) if d.key == "connection"]
+    assert len(conn) == 1
+    assert conn[0].platform == Platform.SENSOR
+    assert conn[0].entity_category == "diagnostic"
+    assert conn[0].translation_key == "connection"
+    assert conn[0].meta["options"] == ["local", "cloud", "offline"]

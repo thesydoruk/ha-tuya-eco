@@ -199,6 +199,9 @@ class PushListener:
     def push_device_report(self, device_id: str, values: dict[str, Any]) -> None:
         """The cloud reported DP values (keyed by code)."""
 
+    def push_device_online(self, device_id: str, online: bool) -> None:
+        """The cloud reported the device going online or offline."""
+
 
 class BaseProvider(ABC):
     """Abstract cloud adapter.
@@ -220,6 +223,10 @@ class BaseProvider(ABC):
     login_fields: dict[str, str] = {}
     # Whether the account is organised in homes the user may pick from.
     supports_homes: bool = False
+    # Whether the provider pushes device events (state, online/offline). Only such
+    # providers get the cloud backup for devices that are unreachable on the LAN;
+    # polling the others would risk rate limits.
+    supports_push: bool = False
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialise the provider."""

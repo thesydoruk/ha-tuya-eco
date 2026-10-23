@@ -19,7 +19,37 @@ from .platform_setup import async_setup_platform_entities
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up sensors."""
-    async_setup_platform_entities(hass, entry, async_add_entities, Platform.SENSOR, EcoSensor)
+
+    def factory(hub: EcoHub, device: EcoDevice, definition: EntityDef) -> EcoSensor:
+        if definition.meta.get("type") == "connection":
+            return EcoConnectionSensor(hub, device, definition)
+        return EcoSensor(hub, device, definition)
+
+    async_setup_platform_entities(hass, entry, async_add_entities, Platform.SENSOR, factory)
+
+
+class EcoConnectionSensor(EcoEntity, SensorEntity):
+    """Which channel serves the device: local, cloud or offline. Always available."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["local", "cloud", "offline"]
+
+    @property
+    def available(self) -> bool:
+        """Shown even when the device itself is unreachable."""
+        return True
+
+    @property
+    def native_value(self) -> str:
+        """Transport in use."""
+        return self.device.transport
+
+    @property
+    def icon(self) -> str:
+        """Icon per transport."""
+        return {"local": "mdi:lan-connect", "cloud": "mdi:cloud-outline", "offline": "mdi:lan-disconnect"}[
+            self.device.transport
+        ]
 
 
 class EcoSensor(EcoEntity, SensorEntity):

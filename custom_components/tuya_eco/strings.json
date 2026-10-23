@@ -673,6 +673,14 @@
       "compressor_strength": {
         "name": "Compressor strength"
       },
+      "connection": {
+        "name": "Connection",
+        "state": {
+          "local": "Local",
+          "cloud": "Cloud",
+          "offline": "Offline"
+        }
+      },
       "countdown": {
         "name": "Countdown"
       },

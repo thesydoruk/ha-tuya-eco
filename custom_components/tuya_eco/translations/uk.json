@@ -673,6 +673,14 @@
       "compressor_strength": {
         "name": "Потужність компресора"
       },
+      "connection": {
+        "name": "З'єднання",
+        "state": {
+          "local": "Локально",
+          "cloud": "Через хмару",
+          "offline": "Офлайн"
+        }
+      },
       "countdown": {
         "name": "Таймер вимкнення"
       },

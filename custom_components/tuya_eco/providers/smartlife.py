@@ -82,6 +82,7 @@ class SmartLifeProvider(BaseProvider):
     login_kind = LoginKind.QR_CODE
     login_fields = {CONF_USER_CODE: "text"}
     supports_homes = True
+    supports_push = True
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialise."""
@@ -348,6 +349,10 @@ class SmartLifeProvider(BaseProvider):
                         values = {code: status.get(code) for code in updated_status_properties}
                         provider._dispatch(target.push_device_report, device.id, values)
                     else:
+                        # online/offline and rename events both arrive without properties
+                        online = getattr(device, "online", None)
+                        if online is not None:
+                            provider._dispatch(target.push_device_online, device.id, bool(online))
                         provider._dispatch(target.push_device_renamed, device.id, str(getattr(device, "name", "")))
 
                 def add_device(self, device: Any) -> None:

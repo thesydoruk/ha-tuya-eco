@@ -45,7 +45,8 @@ def _entry() -> MockConfigEntry:
 
 
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
-    entry.add_to_hass(hass)
+    if hass.config_entries.async_get_entry(entry.entry_id) is None:
+        entry.add_to_hass(hass)
     # No UDP sockets and no real TCP attempts in this test.
     with (
         patch("custom_components.tuya_eco.local.discovery.TuyaDiscovery._async_start", AsyncMock()),

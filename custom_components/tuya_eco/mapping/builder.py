@@ -811,6 +811,17 @@ def build_entities(device: CloudDevice) -> list[EntityDef]:
     _build_alarms(ctx)
     _build_events(ctx)
     _build_by_code(ctx)
+    ctx.defs.append(
+        EntityDef(
+            Platform.SENSOR,
+            "connection",
+            {},
+            name="Connection",
+            entity_category=EntityCategory.DIAGNOSTIC,
+            icon="mdi:lan-connect",
+            meta={"type": "connection", "options": ["local", "cloud", "offline"]},
+        )
+    )
     assign_translation_keys(ctx.defs)
     _LOGGER.debug(
         "%s (%s): %d entities from %d DPs", device.name, device.category, len(ctx.defs), len(device.dp_schema)
@@ -834,7 +845,7 @@ _KNOWN_KEYS: dict[Platform, frozenset[str]] = {
     Platform.BINARY_SENSOR: frozenset(C.BINARY_SENSORS),
     Platform.NUMBER: frozenset(C.NUMBERS),
     Platform.SELECT: frozenset(C.SELECTS),
-    Platform.SENSOR: frozenset(C.SENSORS) | {"bright_value"},
+    Platform.SENSOR: frozenset(C.SENSORS) | {"bright_value", "connection"},
     Platform.BUTTON: frozenset(C.BUTTONS),
     Platform.LIGHT: frozenset({"floodlight", "indicator", "night_light", "backlight"}),
     Platform.COVER: frozenset({"blind"}),

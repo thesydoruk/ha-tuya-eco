@@ -74,7 +74,11 @@ class EcoDevice(TuyaListener):
         self.host: str | None = host
         self.version: float | None = version
         self.dps: dict[str, Any] = self._seed_from_cloud(info)
-        self.available = False
+        self.lan_available = False
+        # Cloud backup: when the provider pushes online/offline + state events, a device
+        # that is unreachable on the LAN stays usable through the cloud.
+        self.cloud_backup = False
+        self.cloud_online: bool | None = info.online
         self.last_update: float = 0.0
         self.last_error: str | None = None
         self._on_key_invalid = on_key_invalid
@@ -112,6 +116,28 @@ class EcoDevice(TuyaListener):
     def name(self) -> str:
         """Display name."""
         return self.info.name
+
+    @property
+    def available(self) -> bool:
+        """Usable: a LAN link is up, or the cloud backup is on and the cloud says online."""
+        return self.lan_available or (self.cloud_backup and self.cloud_online is True)
+
+    @property
+    def transport(self) -> str:
+        """Which channel serves the device right now: local, cloud or offline."""
+        if self.lan_available:
+            return "local"
+        if self.cloud_backup and self.cloud_online is True:
+            return "cloud"
+        return "offline"
+
+    @callback
+    def set_cloud_online(self, online: bool | None) -> None:
+        """Cloud online/offline event."""
+        if online == self.cloud_online:
+            return
+        self.cloud_online = online
+        self._notify()
 
     @property
     def connected(self) -> bool:
@@ -179,8 +205,8 @@ class EcoDevice(TuyaListener):
         link, self._link = self._link, None
         if link:
             await link.close()
-        if self.available:
-            self.available = False
+        if self.lan_available:
+            self.lan_available = False
             self._notify()
 
     def update_info(self, info: CloudDevice, gateway: CloudDevice | None = None) -> None:
@@ -191,6 +217,8 @@ class EcoDevice(TuyaListener):
         if not info.dp_schema and self.info.dp_schema:
             info.dp_schema = self.info.dp_schema  # keep what we had
         self.info = info
+        if info.online is not None:
+            self.cloud_online = info.online
         for dp, value in self._seed_from_cloud(info).items():
             self.dps.setdefault(dp, value)
         if gateway is not None:
@@ -325,7 +353,7 @@ class EcoDevice(TuyaListener):
                     self._key_failure_cycles = 0
                     self._disconnected.clear()
                     self._apply_dps(dps)
-                    self.available = True
+                    self.lan_available = True
                     self.last_update = time.time()
                     self._notify()
                     link.start_heartbeat()
@@ -382,8 +410,7 @@ class EcoDevice(TuyaListener):
         """Push from the device."""
         self._apply_dps(dps, pushed=True)
         self.last_update = time.time()
-        if not self.available:
-            self.available = True
+        self.lan_available = True
         self._notify()
 
     def disconnected(self, exc: Exception | None) -> None:
@@ -487,6 +514,8 @@ class EcoDevice(TuyaListener):
             "host": self.host,
             "version": self.version,
             "available": self.available,
+            "transport": self.transport,
+            "cloud_online": self.cloud_online,
             "connected": self.connected,
             "last_error": self.last_error,
             "last_update": self.last_update,
