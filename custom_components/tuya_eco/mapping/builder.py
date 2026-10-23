@@ -811,7 +811,48 @@ def build_entities(device: CloudDevice) -> list[EntityDef]:
     _build_alarms(ctx)
     _build_events(ctx)
     _build_by_code(ctx)
+    assign_translation_keys(ctx.defs)
     _LOGGER.debug(
         "%s (%s): %d entities from %d DPs", device.name, device.category, len(ctx.defs), len(device.dp_schema)
     )
     return ctx.defs
+
+
+# ---------------------------------------------------------------------- translations
+
+_NUMBERED_KEYS = {
+    (Platform.LIGHT, "light"): "light_n",
+    (Platform.COVER, "cover"): "curtain_n",
+    (Platform.COVER, "garage"): "door_n",
+    (Platform.EVENT, "button"): "button_n",
+    (Platform.VALVE, "switch"): "zone_n",
+}
+_FIXED_KEYS = {
+    (Platform.EVENT, "alarm_message"): "doorbell_message",
+    (Platform.EVENT, "doorbell_pic"): "doorbell_picture",
+    (Platform.BUTTON, "switch_usb6"): "snooze",
+    (Platform.SIREN, "alarm_switch"): "siren",
+    (Platform.SIREN, "siren_switch"): "siren",
+}
+
+
+def assign_translation_keys(defs: list[EntityDef]) -> None:
+    """Give every named entity a translation key so the UI can localise it.
+
+    The English fallback stays in ``name``; translations live in ``strings.json`` under
+    ``entity.<platform>.<key>.name``. Numbered entities (second light, zone 3, …) share one
+    key with an ``n`` placeholder.
+    """
+    for d in defs:
+        if d.name is None or d.translation_key:
+            continue
+        if (d.platform, d.key) in _FIXED_KEYS:
+            d.translation_key = _FIXED_KEYS[(d.platform, d.key)]
+            continue
+        base, idx = C.split_channel(d.key)
+        numbered = _NUMBERED_KEYS.get((d.platform, base))
+        if numbered and idx is not None:
+            d.translation_key = numbered
+            d.meta["translation_placeholders"] = {"n": str(idx)}
+            continue
+        d.translation_key = d.key

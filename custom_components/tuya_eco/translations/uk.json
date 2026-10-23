@@ -105,5 +105,1240 @@
         }
       }
     }
+  },
+  "entity": {
+    "alarm_control_panel": {
+      "alarm": {
+        "name": "Сигналізація"
+      }
+    },
+    "binary_sensor": {
+      "ch2o_state": {
+        "name": "Стан формальдегіду"
+      },
+      "ch4_sensor_state": {
+        "name": "Стан датчика CH4"
+      },
+      "charge_state": {
+        "name": "Стан заряду"
+      },
+      "closed_opened_kit": {
+        "name": "Відкрито/закрито"
+      },
+      "co2_state": {
+        "name": "Стан CO2"
+      },
+      "co_state": {
+        "name": "Стан CO"
+      },
+      "co_status": {
+        "name": "Статус CO"
+      },
+      "defrost": {
+        "name": "Розморожування"
+      },
+      "door_state": {
+        "name": "Стан дверей"
+      },
+      "doorcontact_state": {
+        "name": "Контакт дверей"
+      },
+      "doorcontact_state_2": {
+        "name": "Контакт дверей 2"
+      },
+      "doorcontact_state_3": {
+        "name": "Контакт дверей 3"
+      },
+      "fault": {
+        "name": "Несправність"
+      },
+      "feed_state": {
+        "name": "Стан годування"
+      },
+      "gas_sensor_state": {
+        "name": "Стан газового датчика"
+      },
+      "gas_sensor_status": {
+        "name": "Статус газового датчика"
+      },
+      "master_state": {
+        "name": "Основний стан"
+      },
+      "online": {
+        "name": "Онлайн"
+      },
+      "overcurrent_alarm": {
+        "name": "Сигнал перевантаження струмом"
+      },
+      "overvoltage_alarm": {
+        "name": "Сигнал перенапруги"
+      },
+      "pir": {
+        "name": "PIR"
+      },
+      "pm25_state": {
+        "name": "Стан PM2.5"
+      },
+      "presence_state": {
+        "name": "Присутність"
+      },
+      "pressure_state": {
+        "name": "Стан тиску"
+      },
+      "shock_state": {
+        "name": "Стан удару"
+      },
+      "smoke_sensor_state": {
+        "name": "Стан датчика диму"
+      },
+      "smoke_sensor_status": {
+        "name": "Статус датчика диму"
+      },
+      "sos_state": {
+        "name": "Стан SOS"
+      },
+      "tankfull": {
+        "name": "Бак заповнено"
+      },
+      "temper_alarm": {
+        "name": "Сигнал несанкціонованого втручання"
+      },
+      "valve_state": {
+        "name": "Стан клапана"
+      },
+      "voc_state": {
+        "name": "Стан ЛОС"
+      },
+      "watersensor_state": {
+        "name": "Стан датчика води"
+      },
+      "wet": {
+        "name": "Волога"
+      },
+      "window_state": {
+        "name": "Стан вікна"
+      }
+    },
+    "button": {
+      "device_restart": {
+        "name": "Перезапустити пристрій"
+      },
+      "factory_reset": {
+        "name": "Скидання до заводських налаштувань"
+      },
+      "manual_clean": {
+        "name": "Ручне прибирання"
+      },
+      "reset_duster_cloth": {
+        "name": "Скинути лічильник серветки"
+      },
+      "reset_edge_brush": {
+        "name": "Скинути бічну щітку"
+      },
+      "reset_filter": {
+        "name": "Скинути лічильник фільтра"
+      },
+      "reset_map": {
+        "name": "Скинути карту"
+      },
+      "reset_roll_brush": {
+        "name": "Скинути валикову щітку"
+      },
+      "snooze": {
+        "name": "Відкласти"
+      }
+    },
+    "cover": {
+      "blind": {
+        "name": "Жалюзі"
+      },
+      "curtain_n": {
+        "name": "Штора {n}"
+      },
+      "door_n": {
+        "name": "Двері {n}"
+      }
+    },
+    "event": {
+      "button_n": {
+        "name": "Кнопка {n}",
+        "state": {
+          "click": "Натискання",
+          "double_click": "Подвійне натискання",
+          "press": "Довге натискання"
+        }
+      },
+      "doorbell_message": {
+        "name": "Повідомлення дзвінка"
+      },
+      "doorbell_picture": {
+        "name": "Фото дзвінка"
+      }
+    },
+    "light": {
+      "backlight": {
+        "name": "Підсвітка"
+      },
+      "floodlight": {
+        "name": "Прожектор"
+      },
+      "indicator": {
+        "name": "Індикатор"
+      },
+      "light_n": {
+        "name": "Світло {n}"
+      },
+      "night_light": {
+        "name": "Нічник"
+      }
+    },
+    "number": {
+      "alarm_delay_time": {
+        "name": "Затримка сигналізації"
+      },
+      "alarm_time": {
+        "name": "Час сигналізації"
+      },
+      "arm_down_percent": {
+        "name": "Відсоток опускання"
+      },
+      "arm_up_percent": {
+        "name": "Відсоток підіймання"
+      },
+      "backup_reserve": {
+        "name": "Резерв живлення"
+      },
+      "basic_device_volume": {
+        "name": "Гучність пристрою"
+      },
+      "bright_value_sensor": {
+        "name": "Значення яскравості датчика"
+      },
+      "brightness_max_1": {
+        "name": "Максимальна яскравість 1"
+      },
+      "brightness_max_2": {
+        "name": "Максимальна яскравість 2"
+      },
+      "brightness_max_3": {
+        "name": "Максимальна яскравість 3"
+      },
+      "brightness_min_1": {
+        "name": "Мінімальна яскравість 1"
+      },
+      "brightness_min_2": {
+        "name": "Мінімальна яскравість 2"
+      },
+      "brightness_min_3": {
+        "name": "Мінімальна яскравість 3"
+      },
+      "charge_cur_set": {
+        "name": "Задаваний струм заряду"
+      },
+      "click_sustain_time": {
+        "name": "Час утримання натискання"
+      },
+      "cloud_recipe_number": {
+        "name": "Номер рецепта з хмари"
+      },
+      "cook_temperature": {
+        "name": "Температура приготування"
+      },
+      "cook_temperature_2": {
+        "name": "Температура приготування 2"
+      },
+      "cook_time": {
+        "name": "Час приготування"
+      },
+      "countdown": {
+        "name": "Таймер вимкнення"
+      },
+      "countdown_1": {
+        "name": "Таймер вимкнення 1"
+      },
+      "countdown_2": {
+        "name": "Таймер вимкнення 2"
+      },
+      "countdown_3": {
+        "name": "Таймер вимкнення 3"
+      },
+      "countdown_4": {
+        "name": "Таймер вимкнення 4"
+      },
+      "countdown_5": {
+        "name": "Таймер вимкнення 5"
+      },
+      "countdown_6": {
+        "name": "Таймер вимкнення 6"
+      },
+      "countdown_7": {
+        "name": "Таймер вимкнення 7"
+      },
+      "countdown_8": {
+        "name": "Таймер вимкнення 8"
+      },
+      "countdown_usb1": {
+        "name": "Таймер вимкнення USB 1"
+      },
+      "dehumidify_set_value": {
+        "name": "Задане осушення"
+      },
+      "delay_clean_time": {
+        "name": "Час затримки прибирання"
+      },
+      "delay_set": {
+        "name": "Затримка"
+      },
+      "far_detection": {
+        "name": "Дальність виявлення"
+      },
+      "feed_num": {
+        "name": "Кількість порцій"
+      },
+      "humidity_set": {
+        "name": "Задана вологість"
+      },
+      "installation_height": {
+        "name": "Висота встановлення"
+      },
+      "ipc_bright": {
+        "name": "Яскравість камери"
+      },
+      "ipc_contrast": {
+        "name": "Контрастність камери"
+      },
+      "ipc_sharp": {
+        "name": "Різкість камери"
+      },
+      "liquid_depth_max": {
+        "name": "Максимальний рівень рідини"
+      },
+      "lower_temp": {
+        "name": "Нижня температура"
+      },
+      "manual_feed": {
+        "name": "Ручне годування"
+      },
+      "max_set": {
+        "name": "Максимум"
+      },
+      "mini_set": {
+        "name": "Мінімум"
+      },
+      "near_detection": {
+        "name": "Ближня дальність виявлення"
+      },
+      "output_power_limit": {
+        "name": "Ліміт вихідної потужності"
+      },
+      "powder_set": {
+        "name": "Задана кількість порошку"
+      },
+      "sensitivity": {
+        "name": "Чутливість"
+      },
+      "speed_set": {
+        "name": "Задана швидкість"
+      },
+      "target_dis_closest": {
+        "name": "Найближча відстань до цілі"
+      },
+      "temp": {
+        "name": "Температура"
+      },
+      "temp_boiling_c": {
+        "name": "Температура кипіння (°C)"
+      },
+      "temp_boiling_f": {
+        "name": "Температура кипіння (°F)"
+      },
+      "temp_correction": {
+        "name": "Корекція температури"
+      },
+      "temp_set_f": {
+        "name": "Задана температура (°F)"
+      },
+      "upper_temp": {
+        "name": "Верхня температура"
+      },
+      "voice_times": {
+        "name": "Кількість голосових сигналів"
+      },
+      "volume_set": {
+        "name": "Задана гучність"
+      },
+      "warm_time": {
+        "name": "Час підігріву"
+      },
+      "warn_power1": {
+        "name": "Попередження про потужність 1"
+      },
+      "warn_power2": {
+        "name": "Попередження про потужність 2"
+      },
+      "water_set": {
+        "name": "Задана кількість води"
+      }
+    },
+    "select": {
+      "alarm_state": {
+        "name": "Стан сигналізації"
+      },
+      "alarm_volume": {
+        "name": "Гучність сигналізації"
+      },
+      "basic_anti_flicker": {
+        "name": "Антифліккер"
+      },
+      "basic_nightvision": {
+        "name": "Нічний режим"
+      },
+      "bright_state": {
+        "name": "Режим яскравості"
+      },
+      "cistern": {
+        "name": "Бачок"
+      },
+      "collection_mode": {
+        "name": "Режим збору"
+      },
+      "concentration_set": {
+        "name": "Задана концентрація"
+      },
+      "control_back_mode": {
+        "name": "Напрямок двигуна"
+      },
+      "countdown": {
+        "name": "Таймер вимкнення"
+      },
+      "countdown_set": {
+        "name": "Налаштування таймера"
+      },
+      "cup_number": {
+        "name": "Кількість чашок"
+      },
+      "decibel_sensitivity": {
+        "name": "Чутливість за децибелами"
+      },
+      "dehumidify_set_enum": {
+        "name": "Режим осушення"
+      },
+      "fan_horizontal": {
+        "name": "Горизонтальне коливання"
+      },
+      "fan_speed_enum": {
+        "name": "Швидкість вентилятора"
+      },
+      "fan_vertical": {
+        "name": "Вертикальне коливання"
+      },
+      "ipc_work_mode": {
+        "name": "Режим роботи камери"
+      },
+      "led_type_1": {
+        "name": "Тип LED 1"
+      },
+      "led_type_2": {
+        "name": "Тип LED 2"
+      },
+      "led_type_3": {
+        "name": "Тип LED 3"
+      },
+      "level": {
+        "name": "Рівень"
+      },
+      "level_1": {
+        "name": "Рівень 1"
+      },
+      "level_2": {
+        "name": "Рівень 2"
+      },
+      "light_mode": {
+        "name": "Режим індикатора",
+        "state": {
+          "relay": "Слідує за реле",
+          "pos": "Протилежно реле",
+          "none": "Вимкнено",
+          "on": "Увімкнено",
+          "off": "Вимкнено"
+        }
+      },
+      "material": {
+        "name": "Матеріал"
+      },
+      "mode": {
+        "name": "Режим"
+      },
+      "moodlighting": {
+        "name": "Атмосферне підсвічування"
+      },
+      "motion_sensitivity": {
+        "name": "Чутливість руху"
+      },
+      "record_mode": {
+        "name": "Режим запису"
+      },
+      "relay_status": {
+        "name": "Поведінка після ввімкнення живлення",
+        "state": {
+          "power_off": "Вимкнено",
+          "power_on": "Увімкнено",
+          "last": "Останній стан",
+          "memory": "Останній стан"
+        }
+      },
+      "sensitivity": {
+        "name": "Чутливість"
+      },
+      "spray_mode": {
+        "name": "Режим розпилення"
+      },
+      "temp_setting_quick_c": {
+        "name": "Швидке налаштування температури (°C)"
+      },
+      "up_down": {
+        "name": "Вгору/вниз"
+      },
+      "weather_delay": {
+        "name": "Затримка через погоду"
+      },
+      "work_mode": {
+        "name": "Режим роботи"
+      },
+      "work_type": {
+        "name": "Тип роботи"
+      }
+    },
+    "sensor": {
+      "add_ele": {
+        "name": "Спожита енергія"
+      },
+      "air_quality": {
+        "name": "Якість повітря"
+      },
+      "air_quality_index": {
+        "name": "Індекс якості повітря"
+      },
+      "all_energy": {
+        "name": "Загальна енергія"
+      },
+      "atmospheric_pressture": {
+        "name": "Атмосферний тиск"
+      },
+      "battery": {
+        "name": "Батарея"
+      },
+      "battery_percentage": {
+        "name": "Заряд батареї"
+      },
+      "battery_power": {
+        "name": "Потужність батареї"
+      },
+      "battery_state": {
+        "name": "Стан батареї"
+      },
+      "battery_value": {
+        "name": "Рівень батареї"
+      },
+      "bright_state": {
+        "name": "Яскравість"
+      },
+      "bright_value": {
+        "name": "Освітленість"
+      },
+      "cat_weight": {
+        "name": "Вага кота"
+      },
+      "ch2o_value": {
+        "name": "Формальдегід"
+      },
+      "ch4_sensor_value": {
+        "name": "Значення датчика CH4"
+      },
+      "charge_energy_once": {
+        "name": "Енергія одного заряду"
+      },
+      "clean_area": {
+        "name": "Площа прибирання"
+      },
+      "clean_time": {
+        "name": "Час прибирання"
+      },
+      "co2_value": {
+        "name": "CO2"
+      },
+      "co_value": {
+        "name": "CO"
+      },
+      "compressor_strength": {
+        "name": "Потужність компресора"
+      },
+      "countdown": {
+        "name": "Таймер вимкнення"
+      },
+      "countdown_1": {
+        "name": "Таймер вимкнення 1"
+      },
+      "cumulative_energy_charged": {
+        "name": "Накопичена енергія заряду"
+      },
+      "cumulative_energy_discharged": {
+        "name": "Накопичена енергія розряду"
+      },
+      "cumulative_energy_generated_pv": {
+        "name": "Накопичена енергія сонячних панелей"
+      },
+      "cumulative_energy_output_inv": {
+        "name": "Накопичена енергія інвертора"
+      },
+      "cur_current": {
+        "name": "Струм"
+      },
+      "cur_current1": {
+        "name": "Струм 1"
+      },
+      "cur_current2": {
+        "name": "Струм 2"
+      },
+      "cur_power": {
+        "name": "Поточна потужність"
+      },
+      "cur_power1": {
+        "name": "Поточна потужність 1"
+      },
+      "cur_power2": {
+        "name": "Поточна потужність 2"
+      },
+      "cur_voltage": {
+        "name": "Напруга"
+      },
+      "cur_voltage1": {
+        "name": "Напруга 1"
+      },
+      "cur_voltage2": {
+        "name": "Напруга 2"
+      },
+      "current_soc": {
+        "name": "Поточний рівень заряду (SOC)"
+      },
+      "device_state1": {
+        "name": "Стан пристрою 1"
+      },
+      "device_state2": {
+        "name": "Стан пристрою 2"
+      },
+      "dew_point_temp": {
+        "name": "Температура точки роси"
+      },
+      "duster_cloth": {
+        "name": "Серветка"
+      },
+      "ec_current": {
+        "name": "Електропровідність (EC)"
+      },
+      "eco2": {
+        "name": "eCO2"
+      },
+      "edge_brush": {
+        "name": "Бічна щітка"
+      },
+      "electric_coe": {
+        "name": "Коефіцієнт електроенергії"
+      },
+      "electricity_coe": {
+        "name": "Коефіцієнт електроенергії"
+      },
+      "electricity_left": {
+        "name": "Залишок електроенергії"
+      },
+      "excretion_time_day": {
+        "name": "Час туалету за добу"
+      },
+      "excretion_times_day": {
+        "name": "Кількість відвідувань туалету за добу"
+      },
+      "ext_temp": {
+        "name": "Зовнішня температура"
+      },
+      "feed_report": {
+        "name": "Видано корму"
+      },
+      "feellike_temp": {
+        "name": "Відчутна температура"
+      },
+      "filter": {
+        "name": "Фільтр"
+      },
+      "filter_duration": {
+        "name": "Тривалість роботи фільтра"
+      },
+      "filter_life": {
+        "name": "Ресурс фільтра"
+      },
+      "forward_energy_total": {
+        "name": "Загальна спожита енергія"
+      },
+      "gas_sensor_value": {
+        "name": "Значення газового датчика"
+      },
+      "heat_index": {
+        "name": "Індекс спеки"
+      },
+      "humidity": {
+        "name": "Вологість"
+      },
+      "humidity_current": {
+        "name": "Поточна вологість"
+      },
+      "humidity_indoor": {
+        "name": "Вологість у приміщенні"
+      },
+      "humidity_outdoor": {
+        "name": "Вологість зовні"
+      },
+      "humidity_value": {
+        "name": "Вологість"
+      },
+      "illuminance_value": {
+        "name": "Освітленість"
+      },
+      "inverter_output_power": {
+        "name": "Вихідна потужність інвертора"
+      },
+      "level_current": {
+        "name": "Поточний рівень"
+      },
+      "liquid_depth": {
+        "name": "Рівень рідини"
+      },
+      "liquid_level_percent": {
+        "name": "Відсоток рівня рідини"
+      },
+      "liquid_state": {
+        "name": "Стан рідини"
+      },
+      "orp_current": {
+        "name": "Поточний ORP"
+      },
+      "ph_current": {
+        "name": "Поточний pH"
+      },
+      "pm1": {
+        "name": "PM1"
+      },
+      "pm10": {
+        "name": "PM10"
+      },
+      "pm25": {
+        "name": "PM2.5"
+      },
+      "pm25_value": {
+        "name": "PM2.5"
+      },
+      "power": {
+        "name": "Потужність"
+      },
+      "power_coe": {
+        "name": "Коефіцієнт потужності"
+      },
+      "power_total": {
+        "name": "Загальна потужність"
+      },
+      "pressure_value": {
+        "name": "Тиск"
+      },
+      "pro_add_ele": {
+        "name": "Спожита енергія (Pro)"
+      },
+      "pump_time": {
+        "name": "Час роботи насоса"
+      },
+      "pv_power_channel_1": {
+        "name": "Потужність сонячних панелей, канал 1"
+      },
+      "pv_power_channel_2": {
+        "name": "Потужність сонячних панелей, канал 2"
+      },
+      "pv_power_total": {
+        "name": "Загальна потужність сонячних панелей"
+      },
+      "rain_24h": {
+        "name": "Опади за 24 години"
+      },
+      "rain_rate": {
+        "name": "Інтенсивність опадів"
+      },
+      "remain_time": {
+        "name": "Залишок часу"
+      },
+      "residual_electricity": {
+        "name": "Залишок електроенергії"
+      },
+      "reverse_energy_total": {
+        "name": "Загальна зворотна енергія"
+      },
+      "roll_brush": {
+        "name": "Валикова щітка"
+      },
+      "sensor_humidity": {
+        "name": "Вологість датчика"
+      },
+      "sensor_temperature": {
+        "name": "Температура датчика"
+      },
+      "signal_strength": {
+        "name": "Рівень сигналу"
+      },
+      "smoke_sensor_value": {
+        "name": "Значення датчика диму"
+      },
+      "speed_current": {
+        "name": "Поточна швидкість"
+      },
+      "status": {
+        "name": "Статус"
+      },
+      "supply_frequency": {
+        "name": "Частота мережі"
+      },
+      "tds_in": {
+        "name": "TDS на вході"
+      },
+      "temp": {
+        "name": "Температура"
+      },
+      "temp_around": {
+        "name": "Температура навколо"
+      },
+      "temp_coiler": {
+        "name": "Температура змійовика"
+      },
+      "temp_current": {
+        "name": "Температура"
+      },
+      "temp_current_2": {
+        "name": "Температура 2"
+      },
+      "temp_current_external": {
+        "name": "Зовнішня температура"
+      },
+      "temp_current_external_1": {
+        "name": "Зовнішня температура 1"
+      },
+      "temp_current_external_2": {
+        "name": "Зовнішня температура 2"
+      },
+      "temp_current_external_3": {
+        "name": "Зовнішня температура 3"
+      },
+      "temp_current_f": {
+        "name": "Температура (°F)"
+      },
+      "temp_effluent": {
+        "name": "Температура стоків"
+      },
+      "temp_indoor": {
+        "name": "Температура в приміщенні"
+      },
+      "temp_venting": {
+        "name": "Температура вентиляції"
+      },
+      "temperature": {
+        "name": "Температура"
+      },
+      "time_total": {
+        "name": "Загальний час"
+      },
+      "time_use": {
+        "name": "Час використання"
+      },
+      "today_acc_energy1": {
+        "name": "Енергія за сьогодні 1"
+      },
+      "today_acc_energy2": {
+        "name": "Енергія за сьогодні 2"
+      },
+      "total_clean_area": {
+        "name": "Загальна площа прибирання"
+      },
+      "total_clean_count": {
+        "name": "Загальна кількість прибирань"
+      },
+      "total_clean_time": {
+        "name": "Загальний час прибирання"
+      },
+      "total_energy1": {
+        "name": "Загальна енергія 1"
+      },
+      "total_energy2": {
+        "name": "Загальна енергія 2"
+      },
+      "total_forward_energy": {
+        "name": "Загальна спожита енергія"
+      },
+      "total_pm": {
+        "name": "Загальний PM"
+      },
+      "total_power": {
+        "name": "Загальна потужність"
+      },
+      "total_time": {
+        "name": "Загальний час"
+      },
+      "tvoc": {
+        "name": "TVOC"
+      },
+      "use_time_one": {
+        "name": "Час одного використання"
+      },
+      "uv_index": {
+        "name": "УФ-індекс"
+      },
+      "uv_runtime": {
+        "name": "Час роботи УФ"
+      },
+      "va_battery": {
+        "name": "Батарея"
+      },
+      "va_humidity": {
+        "name": "Вологість"
+      },
+      "va_temperature": {
+        "name": "Температура"
+      },
+      "voc_value": {
+        "name": "ЛОС"
+      },
+      "voltage_coe": {
+        "name": "Коефіцієнт напруги"
+      },
+      "water_level": {
+        "name": "Рівень води"
+      },
+      "water_once": {
+        "name": "Кількість води за раз"
+      },
+      "water_time": {
+        "name": "Час подачі води"
+      },
+      "water_total": {
+        "name": "Загальна кількість води"
+      },
+      "wind_direct": {
+        "name": "Напрямок вітру"
+      },
+      "wind_speed": {
+        "name": "Швидкість вітру"
+      },
+      "windchill_index": {
+        "name": "Індекс вітрового охолодження"
+      },
+      "windspeed_avg": {
+        "name": "Середня швидкість вітру"
+      },
+      "wireless_electricity": {
+        "name": "Бездротова електроенергія"
+      },
+      "work_power": {
+        "name": "Робоча потужність"
+      },
+      "work_state": {
+        "name": "Робочий стан"
+      },
+      "work_state_e": {
+        "name": "Робочий стан (E)"
+      }
+    },
+    "siren": {
+      "siren": {
+        "name": "Сирена"
+      }
+    },
+    "switch": {
+      "anion": {
+        "name": "Іонізатор"
+      },
+      "anti_frost": {
+        "name": "Захист від замерзання"
+      },
+      "auto_clean": {
+        "name": "Автоочищення"
+      },
+      "basic_flip": {
+        "name": "Перевертання зображення"
+      },
+      "basic_osd": {
+        "name": "Екранне меню (OSD)"
+      },
+      "basic_private": {
+        "name": "Режим приватності"
+      },
+      "basic_wdr": {
+        "name": "Широкий динамічний діапазон (WDR)"
+      },
+      "child_lock": {
+        "name": "Блокування від дітей"
+      },
+      "control_back": {
+        "name": "Зворотний напрямок"
+      },
+      "cry_detection_switch": {
+        "name": "Виявлення плачу"
+      },
+      "decibel_switch": {
+        "name": "Вимірювання децибелів"
+      },
+      "disinfection": {
+        "name": "Дезінфекція"
+      },
+      "do_not_disturb": {
+        "name": "Не турбувати"
+      },
+      "eco": {
+        "name": "Еко-режим"
+      },
+      "fan_beep": {
+        "name": "Звук вентилятора"
+      },
+      "fan_cool": {
+        "name": "Охолодження вентилятором"
+      },
+      "feedin_power_limit_enable": {
+        "name": "Обмеження потужності подачі"
+      },
+      "filter_reset": {
+        "name": "Скидання фільтра"
+      },
+      "frost": {
+        "name": "Морозозахист"
+      },
+      "humidifier": {
+        "name": "Зволожувач"
+      },
+      "ipc_auto_siren": {
+        "name": "Автоматична сирена"
+      },
+      "ipc_work_mode": {
+        "name": "Режим роботи камери"
+      },
+      "lock": {
+        "name": "Блокування"
+      },
+      "motion_area_switch": {
+        "name": "Зони руху"
+      },
+      "motion_record": {
+        "name": "Запис за рухом"
+      },
+      "motion_switch": {
+        "name": "Виявлення руху"
+      },
+      "motion_tracking": {
+        "name": "Стеження за рухом"
+      },
+      "muffling": {
+        "name": "Приглушення"
+      },
+      "opposite": {
+        "name": "Протилежно"
+      },
+      "overcharge_switch": {
+        "name": "Захист від перезаряду"
+      },
+      "oxygen": {
+        "name": "Кисень"
+      },
+      "preheat": {
+        "name": "Попередній нагрів"
+      },
+      "preheat_1": {
+        "name": "Попередній нагрів 1"
+      },
+      "preheat_2": {
+        "name": "Попередній нагрів 2"
+      },
+      "pump": {
+        "name": "Насос"
+      },
+      "pump_reset": {
+        "name": "Скидання насоса"
+      },
+      "pump_switch": {
+        "name": "Перемикач насоса"
+      },
+      "record_switch": {
+        "name": "Запис"
+      },
+      "relay_status": {
+        "name": "Стан реле"
+      },
+      "sleep": {
+        "name": "Сон"
+      },
+      "slow_feed": {
+        "name": "Повільна подача"
+      },
+      "snooze": {
+        "name": "Відкладання"
+      },
+      "start": {
+        "name": "Старт"
+      },
+      "sterilization": {
+        "name": "Стерилізація"
+      },
+      "switch": {
+        "name": "Вимикач"
+      },
+      "switch_1": {
+        "name": "Вимикач 1"
+      },
+      "switch_10": {
+        "name": "Вимикач 10"
+      },
+      "switch_11": {
+        "name": "Вимикач 11"
+      },
+      "switch_12": {
+        "name": "Вимикач 12"
+      },
+      "switch_13": {
+        "name": "Вимикач 13"
+      },
+      "switch_14": {
+        "name": "Вимикач 14"
+      },
+      "switch_15": {
+        "name": "Вимикач 15"
+      },
+      "switch_16": {
+        "name": "Вимикач 16"
+      },
+      "switch_17": {
+        "name": "Вимикач 17"
+      },
+      "switch_18": {
+        "name": "Вимикач 18"
+      },
+      "switch_19": {
+        "name": "Вимикач 19"
+      },
+      "switch_2": {
+        "name": "Вимикач 2"
+      },
+      "switch_20": {
+        "name": "Вимикач 20"
+      },
+      "switch_21": {
+        "name": "Вимикач 21"
+      },
+      "switch_22": {
+        "name": "Вимикач 22"
+      },
+      "switch_3": {
+        "name": "Вимикач 3"
+      },
+      "switch_4": {
+        "name": "Вимикач 4"
+      },
+      "switch_5": {
+        "name": "Вимикач 5"
+      },
+      "switch_6": {
+        "name": "Вимикач 6"
+      },
+      "switch_7": {
+        "name": "Вимикач 7"
+      },
+      "switch_8": {
+        "name": "Вимикач 8"
+      },
+      "switch_9": {
+        "name": "Вимикач 9"
+      },
+      "switch_alarm_light": {
+        "name": "Світлова сигналізація"
+      },
+      "switch_alarm_propel": {
+        "name": "Відлякувальна сигналізація"
+      },
+      "switch_alarm_sound": {
+        "name": "Звукова сигналізація"
+      },
+      "switch_backlight": {
+        "name": "Підсвітка"
+      },
+      "switch_disturb": {
+        "name": "Не турбувати"
+      },
+      "switch_kb_sound": {
+        "name": "Звук клавіатури"
+      },
+      "switch_music": {
+        "name": "Музика"
+      },
+      "switch_save_energy": {
+        "name": "Економія енергії"
+      },
+      "switch_sound": {
+        "name": "Звук"
+      },
+      "switch_spray": {
+        "name": "Розпилення"
+      },
+      "switch_usb1": {
+        "name": "USB 1"
+      },
+      "switch_usb2": {
+        "name": "USB 2"
+      },
+      "switch_usb3": {
+        "name": "USB 3"
+      },
+      "switch_usb4": {
+        "name": "USB 4"
+      },
+      "switch_usb5": {
+        "name": "USB 5"
+      },
+      "switch_usb6": {
+        "name": "USB 6"
+      },
+      "switch_voice": {
+        "name": "Голосовий режим"
+      },
+      "uv": {
+        "name": "УФ"
+      },
+      "voice_switch": {
+        "name": "Голосове керування"
+      },
+      "warm": {
+        "name": "Підігрів"
+      },
+      "water": {
+        "name": "Вода"
+      },
+      "water_reset": {
+        "name": "Скидання води"
+      },
+      "water_switch": {
+        "name": "Подача води"
+      },
+      "wet": {
+        "name": "Вологий режим"
+      },
+      "window_check": {
+        "name": "Контроль вікна"
+      },
+      "wireless_batterylock": {
+        "name": "Блокування бездротової батареї"
+      }
+    },
+    "valve": {
+      "zone_n": {
+        "name": "Зона {n}"
+      }
+    }
   }
 }

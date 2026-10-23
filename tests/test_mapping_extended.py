@@ -229,3 +229,61 @@ def test_illuminance_sensor_vs_light_brightness() -> None:
         ],
     )
     assert build_entities(light)[0].platform == Platform.LIGHT
+
+
+def test_translation_keys_and_placeholders() -> None:
+    plug = _dev(
+        "cz",
+        [
+            (1, "switch_1", DpType.BOOLEAN, {}, False),
+            (2, "switch_2", DpType.BOOLEAN, {}, False),
+            (41, "child_lock", DpType.BOOLEAN, {}, False),
+            (38, "relay_status", DpType.ENUM, {"range": ["power_off", "power_on"]}, False),
+        ],
+    )
+    by_key = {d.key: d for d in build_entities(plug)}
+    assert by_key["child_lock"].translation_key == "child_lock"
+    assert by_key["relay_status"].translation_key == "relay_status"
+    assert by_key["switch_2"].translation_key == "switch_2"
+
+    dimmer = _dev(
+        "tgkg",
+        [
+            (1, "switch_led_1", DpType.BOOLEAN, {}, False),
+            (7, "switch_led_2", DpType.BOOLEAN, {}, False),
+        ],
+    )
+    lights = {d.key: d for d in build_entities(dimmer)}
+    assert lights["light_1"].translation_key == "light_n"
+    assert lights["light_1"].meta["translation_placeholders"] == {"n": "1"}
+    assert lights["light_2"].meta["translation_placeholders"] == {"n": "2"}
+
+    valves = _dev("sfkzq", [(1, "switch_1", DpType.BOOLEAN, {}, False), (2, "switch_2", DpType.BOOLEAN, {}, False)])
+    zone2 = next(d for d in build_entities(valves) if d.key == "switch_2")
+    assert zone2.translation_key == "zone_n" and zone2.meta["translation_placeholders"] == {"n": "2"}
+
+
+def test_every_translation_key_has_an_english_string() -> None:
+    import json
+    from pathlib import Path
+
+    strings = json.loads(
+        (Path(__file__).resolve().parents[1] / "custom_components" / "tuya_eco" / "strings.json").read_text(
+            encoding="utf-8"
+        )
+    )["entity"]
+    from custom_components.tuya_eco.mapping import codes as C
+
+    for platform, table in (
+        ("switch", C.SWITCHES),
+        ("binary_sensor", C.BINARY_SENSORS),
+        ("number", C.NUMBERS),
+        ("select", C.SELECTS),
+        ("button", C.BUTTONS),
+    ):
+        missing = [code for code in table if code not in strings[platform]]
+        assert not missing, (platform, missing)
+    for key in ("light_n", "floodlight", "indicator", "night_light", "backlight"):
+        assert key in strings["light"]
+    for key in ("curtain_n", "door_n", "blind"):
+        assert key in strings["cover"]
