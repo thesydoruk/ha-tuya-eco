@@ -40,6 +40,14 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         "options": dict(entry.options),
         "provider": hub.provider.key,
         "last_cloud_error": hub.last_cloud_error,
+        "skipped_conflicts": [
+            {
+                "id": dev_id,
+                "name": hub.cloud_devices[dev_id].name if dev_id in hub.cloud_devices else None,
+                "owner": owner,
+            }
+            for dev_id, owner in hub.conflicts.items()
+        ],
         "discovery": {
             dev_id: {"ip": d.ip, "version": d.version, "age": round(d.age)}
             for dev_id, d in hub.discovery.devices.items()

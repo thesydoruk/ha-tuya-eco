@@ -162,3 +162,59 @@ async def test_stale_entities_are_purged_on_setup(hass: HomeAssistant) -> None:
     assert registry.async_get(orphan.entity_id) is None  # device not in the account
     assert registry.async_get(keep_a.entity_id) is not None  # still generated
     assert registry.async_get(keep_b.entity_id) is not None  # device without schema: untouched
+
+
+async def test_device_shared_by_two_entries_is_controlled_once(hass: HomeAssistant, caplog) -> None:
+    """A device present in two tuya_eco entries is handled by the first one only."""
+    first = _entry()  # devices A and B
+    second = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"manual:{DEV_B}",
+        title="Second account",
+        data={
+            CONF_PROVIDER: "manual",
+            CONF_PROVIDER_DATA: {
+                "devices": [
+                    {
+                        "device_id": DEV_B,
+                        "local_key": "0123456789abcdef",
+                        "name": "Plug B",
+                        "host": "192.0.2.2",
+                        "protocol_version": "3.3",
+                    },
+                    {
+                        "device_id": "bf0000000000000000c3",
+                        "local_key": "0123456789abcdef",
+                        "name": "Plug C",
+                        "host": "192.0.2.3",
+                        "protocol_version": "3.3",
+                    },
+                ]
+            },
+        },
+    )
+    await _setup(hass, first)
+    await _setup(hass, second)
+    hub1, hub2 = first.runtime_data, second.runtime_data
+    assert set(hub1.devices) == {DEV_A, DEV_B}
+    assert set(hub2.devices) == {"bf0000000000000000c3"}
+    assert hub2.conflicts == {DEV_B: first.title}
+    assert "already controlled by the entry" in caplog.text
+
+    registry = dr.async_get(hass)
+    dev_b = registry.async_get_device(identifiers={(DOMAIN, DEV_B)})
+    assert dev_b is not None and dev_b.config_entries == {first.entry_id}
+
+    # Once the first entry lets the device go, the second one may take it over.
+    with patch("custom_components.tuya_eco.local.device.EcoDevice.async_stop", AsyncMock()):
+        await hub1.async_remove_device(DEV_B)
+    taken = [CloudDevice(id=DEV_B, name="Plug B", local_key="0123456789abcdef")]
+    with (
+        patch.object(hub2.provider, "async_fetch_devices", AsyncMock(return_value=taken)),
+        patch("custom_components.tuya_eco.local.device.EcoDevice.async_start", AsyncMock()),
+        patch("custom_components.tuya_eco.local.device.EcoDevice.async_stop", AsyncMock()),
+    ):
+        assert await hub2.async_refresh_cloud(force=True)
+    await hass.async_block_till_done()
+    assert DEV_B in hub2.devices
+    assert DEV_B not in hub2.conflicts

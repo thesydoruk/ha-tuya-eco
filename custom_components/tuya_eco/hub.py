@@ -75,6 +75,8 @@ class EcoHub:
         self._unsub_timer: Any = None
         self._persist_handle: asyncio.TimerHandle | None = None
         self.last_cloud_error: str | None = None
+        # Devices skipped because another tuya_eco entry already controls them: id → that entry's title.
+        self.conflicts: dict[str, str] = {}
 
     # ------------------------------------------------------------------ options
 
@@ -185,9 +187,33 @@ class EcoHub:
             return self.cloud_devices[info.gateway_id]
         return None
 
+    def _owned_elsewhere(self, dev_id: str) -> str | None:
+        """Title of another loaded tuya_eco entry that already controls `dev_id`, if any."""
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id == self.entry.entry_id:
+                continue
+            other = getattr(entry, "runtime_data", None)
+            if isinstance(other, EcoHub) and dev_id in other.devices:
+                return entry.title
+        return None
+
     def _ensure_device(self, info: CloudDevice) -> EcoDevice | None:
         if info.id in self.disabled_devices:
             return None
+        if info.id not in self.devices and (owner := self._owned_elsewhere(info.id)):
+            # Tuya devices accept a single LAN session: two entries fighting over one
+            # device would make it flap, and the entities would collide anyway.
+            if self.conflicts.get(info.id) != owner:
+                _LOGGER.warning(
+                    "%s: device %s (%s) is already controlled by the entry '%s'; skipping it here",
+                    self.entry.title,
+                    info.name,
+                    info.id,
+                    owner,
+                )
+            self.conflicts[info.id] = owner
+            return None
+        self.conflicts.pop(info.id, None)
         if not info.local_key and not (self._gateway_for(info) and self._gateway_for(info).local_key):  # type: ignore[union-attr]
             _LOGGER.debug("%s: no local key, skipping", info.name)
             return None
