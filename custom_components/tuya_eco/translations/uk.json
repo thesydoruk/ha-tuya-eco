@@ -226,8 +226,14 @@
       "factory_reset": {
         "name": "Скидання до заводських налаштувань"
       },
+      "force_reset": {
+        "name": "Примусове перезавантаження"
+      },
       "manual_clean": {
         "name": "Ручне прибирання"
+      },
+      "reset": {
+        "name": "Перезавантаження"
       },
       "reset_duster_cloth": {
         "name": "Скинути лічильник серветки"
@@ -293,8 +299,14 @@
       }
     },
     "number": {
+      "adaptive_time": {
+        "name": "Час адаптивного тесту"
+      },
       "alarm_delay_time": {
         "name": "Затримка сигналізації"
+      },
+      "alarm_duration": {
+        "name": "Тривалість сигналізації"
       },
       "alarm_time": {
         "name": "Час сигналізації"
@@ -310,6 +322,9 @@
       },
       "basic_device_volume": {
         "name": "Гучність пристрою"
+      },
+      "breath_min_distance": {
+        "name": "Мінімальна відстань виявлення дихання"
       },
       "bright_value_sensor": {
         "name": "Значення яскравості датчика"
@@ -425,8 +440,23 @@
       "mini_set": {
         "name": "Мінімум"
       },
+      "move_distance": {
+        "name": "Дальність виявлення руху"
+      },
+      "move_false_detection": {
+        "name": "Фільтр хибних спрацювань руху"
+      },
+      "move_min_distance": {
+        "name": "Мінімальна відстань виявлення руху"
+      },
+      "move_sensitivity": {
+        "name": "Чутливість до руху"
+      },
       "near_detection": {
         "name": "Ближня дальність виявлення"
+      },
+      "none_delay_time": {
+        "name": "Затримка зникнення присутності"
       },
       "output_power_limit": {
         "name": "Ліміт вихідної потужності"
@@ -437,8 +467,23 @@
       "sensitivity": {
         "name": "Чутливість"
       },
+      "small_move_distance": {
+        "name": "Відстань виявлення малого руху"
+      },
+      "small_move_min_distance": {
+        "name": "Мінімальна відстань малого руху"
+      },
+      "small_move_sensitivity": {
+        "name": "Чутливість до малого руху"
+      },
       "speed_set": {
         "name": "Задана швидкість"
+      },
+      "static_distance": {
+        "name": "Дальність виявлення нерухомої присутності"
+      },
+      "static_sensitivity": {
+        "name": "Чутливість до нерухомої присутності"
       },
       "target_dis_closest": {
         "name": "Найближча відстань до цілі"
@@ -481,11 +526,25 @@
       }
     },
     "select": {
+      "alarm_mode": {
+        "name": "Режим сигналізації",
+        "state": {
+          "armed": "Під охороною",
+          "disarm": "Знято з охорони",
+          "sos": "Тривога"
+        }
+      },
       "alarm_state": {
         "name": "Стан сигналізації"
       },
       "alarm_volume": {
-        "name": "Гучність сигналізації"
+        "name": "Гучність сигналізації",
+        "state": {
+          "high": "Висока",
+          "middle": "Середня",
+          "low": "Низька",
+          "mute": "Без звуку"
+        }
       },
       "basic_anti_flicker": {
         "name": "Антифліккер"
@@ -575,6 +634,14 @@
       "motion_sensitivity": {
         "name": "Чутливість руху"
       },
+      "power_memory": {
+        "name": "Поведінка після ввімкнення живлення",
+        "state": {
+          "default": "Заводський стан",
+          "memory": "Останній стан",
+          "custom": "Власний стан"
+        }
+      },
       "record_mode": {
         "name": "Режим запису"
       },
@@ -584,7 +651,22 @@
           "power_off": "Вимкнено",
           "power_on": "Увімкнено",
           "last": "Останній стан",
-          "memory": "Останній стан"
+          "memory": "Останній стан",
+          "off": "Вимкнено",
+          "on": "Увімкнено"
+        }
+      },
+      "scene": {
+        "name": "Сцена",
+        "state": {
+          "night": "Ніч",
+          "reading": "Читання",
+          "working": "Робота",
+          "leisure": "Відпочинок",
+          "soft": "М'яка",
+          "colorful": "Барвиста",
+          "dazzling": "Яскрава",
+          "gorgeous": "Розкішна"
         }
       },
       "sensitivity": {
@@ -825,6 +907,17 @@
       "liquid_state": {
         "name": "Стан рідини"
       },
+      "movement_state": {
+        "name": "Стан руху",
+        "state": {
+          "none": "Немає",
+          "large_move": "Великий рух",
+          "small_move": "Малий рух",
+          "breathe": "Дихання",
+          "far": "Далеко",
+          "near": "Близько"
+        }
+      },
       "orp_current": {
         "name": "Поточний ORP"
       },
@@ -908,6 +1001,9 @@
       },
       "supply_frequency": {
         "name": "Частота мережі"
+      },
+      "target_dis_closest": {
+        "name": "Відстань до цілі"
       },
       "tds_in": {
         "name": "TDS на вході"
@@ -1063,6 +1159,9 @@
       }
     },
     "switch": {
+      "adaptive_test": {
+        "name": "Адаптивний тест"
+      },
       "anion": {
         "name": "Іонізатор"
       },
@@ -1083,6 +1182,15 @@
       },
       "basic_wdr": {
         "name": "Широкий динамічний діапазон (WDR)"
+      },
+      "breath_false_detection": {
+        "name": "Фільтр хибного виявлення дихання"
+      },
+      "breath_self_test": {
+        "name": "Самотест дихання"
+      },
+      "buzzer": {
+        "name": "Зумер"
       },
       "child_lock": {
         "name": "Блокування від дітей"
@@ -1180,11 +1288,23 @@
       "relay_status": {
         "name": "Стан реле"
       },
+      "remote_switch": {
+        "name": "Керування з пульта"
+      },
+      "rf_pairing": {
+        "name": "Сполучення RF-пульта"
+      },
+      "rf_remote_control": {
+        "name": "RF-пульт"
+      },
       "sleep": {
         "name": "Сон"
       },
       "slow_feed": {
         "name": "Повільна подача"
+      },
+      "small_move_self_test": {
+        "name": "Самотест малого руху"
       },
       "snooze": {
         "name": "Відкладання"

@@ -115,9 +115,12 @@ instruction set (the same knowledge the core Home Assistant integration encodes)
 | event | scene/wireless switches (`wxkg`: click / double click / long press per button) and doorbell messages/pictures; fired on pushed reports only |
 
 Anything unknown falls back to a sensible generic entity by DP type, and a diagnostics
-download shows the full schema and link state. Custom profiles: drop a YAML file in
+download shows the full schema and link state. Every device also gets a diagnostic
+**Connection** sensor (`local` / `cloud` / `offline`) whose attributes are the LAN host,
+protocol version, last error and the raw values of the DPs no entity covers — vendor DPs
+the cloud does not list show up there first. Custom profiles: drop a YAML file in
 `custom_components/tuya_eco/profiles/` keyed by product id (format documented in
-`mapping/profiles.py`).
+`mapping/profiles.py`); `mode: extend` adds such DPs on top of the automatic mapping.
 
 Services: `tuya_eco.set_dps` (raw DP write), `tuya_eco.refresh_cloud`, `tuya_eco.reconnect`.
 
@@ -152,7 +155,7 @@ directly:
 |---|---|
 | [jasonacox/tinytuya](https://github.com/jasonacox/tinytuya) (MIT) | The reference for the LAN wire format (55AA/6699 framing, 3.4/3.5 session-key handshake, device22 quirks, UDP discovery). Its output generated the golden vectors in `tests/test_wire.py` and the first version of this integration used its packing helpers. |
 | [rospogrigio/localtuya](https://github.com/rospogrigio/localtuya) and the [xZetsubou/hass-localtuya](https://github.com/xZetsubou/hass-localtuya) fork (GPL-3.0) | The asyncio protocol design (dispatcher keyed by sequence number, sentinel keys for heartbeat/session replies), the passive IP re-resolution from discovery broadcasts and the reconnect-on-broadcast idea. |
-| [make-all/tuya-local](https://github.com/make-all/tuya-local) (MIT) | Reconnect/back-off strategy, protocol-version rotation, the pending-update overlay for optimistic state, the YAML profile idea and many DP-code semantics. |
+| [make-all/tuya-local](https://github.com/make-all/tuya-local) (MIT) | Reconnect/back-off strategy, protocol-version rotation, the pending-update overlay for optimistic state, the YAML profile idea and many DP-code semantics (including the vendor DPs in the bundled profiles and the default v1 light scenes). |
 | [home-assistant/core — tuya](https://github.com/home-assistant/core/tree/dev/homeassistant/components/tuya) (Apache-2.0) | The QR login flow through the device-sharing API, the category/DP-code knowledge behind the entity mapping, and the colour-data encodings. |
 | [tuya/tuya-device-sharing-sdk](https://github.com/tuya/tuya-device-sharing-sdk) (MIT) | Used as a dependency for the Smart Life / Tuya Smart login and device list. |
 | [vineetchoudhary/tuya-local-key](https://github.com/vineetchoudhary/tuya-local-key) | Confirmed that the device-sharing API returns local keys and documented its limits for OEM apps. |

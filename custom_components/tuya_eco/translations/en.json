@@ -226,8 +226,14 @@
       "factory_reset": {
         "name": "Factory reset"
       },
+      "force_reset": {
+        "name": "Force reset"
+      },
       "manual_clean": {
         "name": "Manual clean"
+      },
+      "reset": {
+        "name": "Reset"
       },
       "reset_duster_cloth": {
         "name": "Reset duster cloth"
@@ -293,8 +299,14 @@
       }
     },
     "number": {
+      "adaptive_time": {
+        "name": "Adaptive test time"
+      },
       "alarm_delay_time": {
         "name": "Alarm delay time"
+      },
+      "alarm_duration": {
+        "name": "Alarm duration"
       },
       "alarm_time": {
         "name": "Alarm time"
@@ -310,6 +322,9 @@
       },
       "basic_device_volume": {
         "name": "Basic device volume"
+      },
+      "breath_min_distance": {
+        "name": "Breathing minimum distance"
       },
       "bright_value_sensor": {
         "name": "Bright value sensor"
@@ -425,8 +440,23 @@
       "mini_set": {
         "name": "Mini set"
       },
+      "move_distance": {
+        "name": "Motion detection distance"
+      },
+      "move_false_detection": {
+        "name": "Motion false detection"
+      },
+      "move_min_distance": {
+        "name": "Motion minimum distance"
+      },
+      "move_sensitivity": {
+        "name": "Motion sensitivity"
+      },
       "near_detection": {
         "name": "Near detection"
+      },
+      "none_delay_time": {
+        "name": "Exit delay"
       },
       "output_power_limit": {
         "name": "Output power limit"
@@ -437,11 +467,26 @@
       "sensitivity": {
         "name": "Sensitivity"
       },
+      "small_move_distance": {
+        "name": "Small motion distance"
+      },
+      "small_move_min_distance": {
+        "name": "Small motion minimum distance"
+      },
+      "small_move_sensitivity": {
+        "name": "Small motion sensitivity"
+      },
       "speed_set": {
         "name": "Speed set"
       },
+      "static_distance": {
+        "name": "Stationary detection distance"
+      },
+      "static_sensitivity": {
+        "name": "Stationary sensitivity"
+      },
       "target_dis_closest": {
-        "name": "Target dis closest"
+        "name": "Target distance"
       },
       "temp": {
         "name": "Temp"
@@ -481,11 +526,25 @@
       }
     },
     "select": {
+      "alarm_mode": {
+        "name": "Alarm mode",
+        "state": {
+          "armed": "Armed",
+          "disarm": "Disarmed",
+          "sos": "Alarm"
+        }
+      },
       "alarm_state": {
         "name": "Alarm state"
       },
       "alarm_volume": {
-        "name": "Alarm volume"
+        "name": "Alarm volume",
+        "state": {
+          "high": "High",
+          "middle": "Medium",
+          "low": "Low",
+          "mute": "Mute"
+        }
       },
       "basic_anti_flicker": {
         "name": "Basic anti flicker"
@@ -575,6 +634,14 @@
       "motion_sensitivity": {
         "name": "Motion sensitivity"
       },
+      "power_memory": {
+        "name": "Power-on behavior",
+        "state": {
+          "default": "Default",
+          "memory": "Last state",
+          "custom": "Custom"
+        }
+      },
       "record_mode": {
         "name": "Record mode"
       },
@@ -584,7 +651,22 @@
           "power_off": "Off",
           "power_on": "On",
           "last": "Last state",
-          "memory": "Last state"
+          "memory": "Last state",
+          "off": "Off",
+          "on": "On"
+        }
+      },
+      "scene": {
+        "name": "Scene",
+        "state": {
+          "night": "Night",
+          "reading": "Reading",
+          "working": "Working",
+          "leisure": "Leisure",
+          "soft": "Soft",
+          "colorful": "Colorful",
+          "dazzling": "Dazzling",
+          "gorgeous": "Gorgeous"
         }
       },
       "sensitivity": {
@@ -825,6 +907,17 @@
       "liquid_state": {
         "name": "Liquid state"
       },
+      "movement_state": {
+        "name": "Movement state",
+        "state": {
+          "none": "None",
+          "large_move": "Large movement",
+          "small_move": "Small movement",
+          "breathe": "Breathing",
+          "far": "Far",
+          "near": "Near"
+        }
+      },
       "orp_current": {
         "name": "Orp current"
       },
@@ -908,6 +1001,9 @@
       },
       "supply_frequency": {
         "name": "Supply frequency"
+      },
+      "target_dis_closest": {
+        "name": "Target distance"
       },
       "tds_in": {
         "name": "Tds in"
@@ -1063,6 +1159,9 @@
       }
     },
     "switch": {
+      "adaptive_test": {
+        "name": "Adaptive test"
+      },
       "anion": {
         "name": "Anion"
       },
@@ -1083,6 +1182,15 @@
       },
       "basic_wdr": {
         "name": "Basic wdr"
+      },
+      "breath_false_detection": {
+        "name": "Breathing false detection"
+      },
+      "breath_self_test": {
+        "name": "Breathing self-test"
+      },
+      "buzzer": {
+        "name": "Buzzer"
       },
       "child_lock": {
         "name": "Child lock"
@@ -1180,11 +1288,23 @@
       "relay_status": {
         "name": "Relay status"
       },
+      "remote_switch": {
+        "name": "Remote control"
+      },
+      "rf_pairing": {
+        "name": "RF pairing"
+      },
+      "rf_remote_control": {
+        "name": "RF remote control"
+      },
       "sleep": {
         "name": "Sleep"
       },
       "slow_feed": {
         "name": "Slow feed"
+      },
+      "small_move_self_test": {
+        "name": "Small motion self-test"
       },
       "snooze": {
         "name": "Snooze"

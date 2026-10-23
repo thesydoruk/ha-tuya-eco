@@ -1,0 +1,36 @@
+# PCIe power/reset card for a desktop PC. The Smart Life cloud maps DP 7/8 to
+# switch_usb1/2 and reports DP 38 as power_on/power_off, but the card has no USB
+# ports: DP 7 is RF remote pairing, DP 8 the buzzer, and DP 38 is "on"/"off" on the
+# LAN. DP 101 (reset buttons) and DP 102 (RF remote) are not in the cloud schema.
+# DP semantics from tuya-local (jh_pcpro+.yaml).
+name: JH-PC Pro PC power switch
+products:
+  - id: rtbhfbuii82scjrp
+mode: extend
+dps:
+  - {id: 7, code: rf_pairing, type: Boolean}
+  - {id: 8, code: buzzer, type: Boolean}
+  - {id: 38, code: relay_status, type: Enum, values: {range: ["off", "on"]}}
+entities:
+  - platform: button
+    key: reset
+    dps: {press: 101}
+    name: Reset
+    translation_key: reset
+    device_class: restart
+    meta: {press_value: Reset}
+  - platform: button
+    key: force_reset
+    dps: {press: 101}
+    name: Force reset
+    translation_key: force_reset
+    icon: mdi:restart-alert
+    meta: {press_value: forceReset}
+  - platform: switch
+    key: rf_remote_control
+    dps: {switch: 102}
+    name: RF remote control
+    translation_key: rf_remote_control
+    entity_category: config
+    icon: mdi:remote
+    meta: {on_value: "on", off_value: "off"}

@@ -21,7 +21,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class EcoButton(EcoEntity, ButtonEntity):
-    """Pressing writes True."""
+    """Pressing writes True (or ``press_value`` from meta)."""
 
     def __init__(self, hub: EcoHub, device: EcoDevice, definition: EntityDef) -> None:
         """Initialise."""
@@ -31,4 +31,4 @@ class EcoButton(EcoEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Press."""
-        await self.async_write("press", True)
+        await self.async_write("press", self.definition.meta.get("press_value", True))

@@ -23,8 +23,35 @@ from tuya_eco.mapping import codes as C  # noqa: E402
 COMPONENT = ROOT / "custom_components" / "tuya_eco"
 
 STATES = {
-    "relay_status": {"power_off": "Off", "power_on": "On", "last": "Last state", "memory": "Last state"},
+    "relay_status": {
+        "power_off": "Off",
+        "power_on": "On",
+        "last": "Last state",
+        "memory": "Last state",
+        "off": "Off",
+        "on": "On",
+    },
     "light_mode": {"relay": "Follows relay", "pos": "Opposite of relay", "none": "Off", "on": "On", "off": "Off"},
+    "alarm_mode": {"armed": "Armed", "disarm": "Disarmed", "sos": "Alarm"},
+    "alarm_volume": {"high": "High", "middle": "Medium", "low": "Low", "mute": "Mute"},
+    "movement_state": {
+        "none": "None",
+        "large_move": "Large movement",
+        "small_move": "Small movement",
+        "breathe": "Breathing",
+        "far": "Far",
+        "near": "Near",
+    },
+}
+LIGHT_SCENE_NAMES = {
+    "night": "Night",
+    "reading": "Reading",
+    "working": "Working",
+    "leisure": "Leisure",
+    "soft": "Soft",
+    "colorful": "Colorful",
+    "dazzling": "Dazzling",
+    "gorgeous": "Gorgeous",
 }
 
 
@@ -52,12 +79,23 @@ def build_en() -> dict[str, dict[str, dict]]:
     for code, rule in C.SENSORS.items():
         if code == "bright_value_sensor":
             continue
-        put("sensor", code, _name(rule, code))
+        put("sensor", code, _name(rule, code), STATES.get(code))
     put("sensor", "bright_value", "Illuminance")
     put("sensor", "connection", "Connection", {"local": "Local", "cloud": "Cloud", "offline": "Offline"})
     for code, rule in C.BUTTONS.items():
         put("button", code, _name(rule, code))
     put("button", "snooze", "Snooze")
+    # keys used by profiles/*.yaml and composite builders
+    put("button", "reset", "Reset")
+    put("button", "force_reset", "Force reset")
+    put("switch", "rf_remote_control", "RF remote control")
+    put("select", "scene", "Scene", {k: LIGHT_SCENE_NAMES[k] for k in C.LIGHT_SCENES_V1})
+    put(
+        "select",
+        "power_memory",
+        "Power-on behavior",
+        {"default": "Default", "memory": "Last state", "custom": "Custom"},
+    )
     put("siren", "siren", "Siren")
     put("valve", "zone_n", "Zone {n}")
     put("light", "light_n", "Light {n}")

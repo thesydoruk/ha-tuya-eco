@@ -312,6 +312,11 @@ class TuyaMobileApi:
         result = await self._request("tuya.m.device.get", {"devId": device_id})
         return dict(result or {})
 
+    async def product_info(self, product_id: str) -> dict[str, Any]:
+        """Product card: ``name`` is the model shown by the app (e.g. ``LDVWIFIB40E14RGBW``)."""
+        result = await self._request("tuya.m.product.info.get", {"productId": product_id})
+        return dict(result or {})
+
     async def publish_dps(self, device_id: str, gateway_id: str, dps: dict[str, Any]) -> None:
         """Cloud command (fallback)."""
         await self._request(
@@ -451,6 +456,7 @@ class TuyaOemProvider(BaseProvider):
         # does, and all devices of one product share it.
         self._schema_by_product: dict[str, dict[int, DpSpec]] = {}
         self._version_by_product: dict[str, str | None] = {}
+        self._meta_by_product: dict[str, dict[str, str]] = {}
 
     def _resolve_profile(self) -> OemAppProfile:
         if self.profile is not None:
@@ -577,11 +583,27 @@ class TuyaOemProvider(BaseProvider):
                 return
             self._schema_by_product[pid] = schema
             self._version_by_product[pid] = str(detail["pv"]) if detail.get("pv") else None
+            product_name = str(detail.get("productName") or detail.get("product_name") or "")
+            if not product_name and device.product_id and not device.product_name:
+                # Neither the device list nor device.get carry the model name; the product card does.
+                try:
+                    product_name = str((await api.product_info(device.product_id)).get("name") or "")
+                except ProviderError as err:
+                    _LOGGER.debug("%s: product.info.get failed: %s", device.product_id, err)
+            self._meta_by_product[pid] = {
+                "product_name": product_name,
+                "category": str(detail.get("category") or ""),
+            }
             if detail.get("isOnline") is not None:
                 device.online = bool(detail["isOnline"])
             await asyncio.sleep(0.3)  # be gentle with the OEM endpoint
         device.dp_schema = dict(self._schema_by_product[pid])
         device.protocol_version = device.protocol_version or self._version_by_product.get(pid)
+        meta = self._meta_by_product.get(pid, {})
+        if not device.product_name and meta.get("product_name"):
+            device.product_name = meta["product_name"]
+        if not device.category and meta.get("category"):
+            device.category = meta["category"]
         if not device.status:
             code_by_dp = {dp: spec.code for dp, spec in device.dp_schema.items()}
             for dp, value in (raw.get("dps") or {}).items():

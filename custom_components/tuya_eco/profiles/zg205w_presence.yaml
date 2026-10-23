@@ -1,0 +1,44 @@
+# ZG-205W mmWave presence sensor. The Smart Life cloud only knows the standard DPs
+# (presence_state, sensitivity, near/far detection, illuminance); the tuning and
+# movement DPs 102-122 are vendor DPs that only show up on the LAN. The cloud's generic
+# names for DPs 2-4 are misleading on this device: DP 2 is the motion sensitivity, DP 3
+# the motion detection distance (up to 10 m) and DP 4 the stationary detection distance
+# (up to 6 m), so the profile renames them.
+# DP semantics from tuya-local (zg205w_mmWave_presence_sensor.yaml).
+name: ZG-205W mmWave presence sensor
+products:
+  - id: uykwakpl6rbxvjdd
+  - id: qbapy7r4deyp6zbx
+mode: extend
+dps:
+  - {id: 2, code: move_sensitivity, type: Integer, values: {min: 0, max: 10, scale: 0, step: 1}}
+  - {id: 3, code: move_distance, type: Integer, values: {min: 0, max: 1000, scale: 0, step: 10, unit: cm}}
+  - {id: 4, code: static_distance, type: Integer, values: {min: 0, max: 600, scale: 0, step: 10, unit: cm}}
+  - {id: 102, code: static_sensitivity, type: Integer, values: {min: 0, max: 10, scale: 0, step: 1}}
+  - {id: 103, code: basic_indicator, type: Boolean}
+  - {id: 104, code: alarm_mode, type: Enum, values: {range: [armed, disarm, sos]}}
+  - {id: 105, code: small_move_distance, type: Integer, values: {min: 0, max: 600, scale: 0, step: 10, unit: cm}}
+  - {id: 106, code: small_move_sensitivity, type: Integer, values: {min: 0, max: 10, scale: 0, step: 1}}
+  - {id: 107, code: alarm_volume, type: Enum, values: {range: [high, middle, low, mute]}}
+  - {id: 108, code: none_delay_time, type: Integer, values: {min: 0, max: 28800, scale: 0, step: 1, unit: s}}
+  - {id: 109, code: alarm_duration, type: Integer, values: {min: 1, max: 30, scale: 0, step: 1, unit: min}}
+  - {id: 110, code: move_min_distance, type: Integer, values: {min: 0, max: 1000, scale: 0, step: 10, unit: cm}}
+  - {id: 111, code: small_move_min_distance, type: Integer, values: {min: 0, max: 1000, scale: 0, step: 10, unit: cm}}
+  - {id: 112, code: breath_min_distance, type: Integer, values: {min: 0, max: 1000, scale: 0, step: 10, unit: cm}}
+  - {id: 113, code: adaptive_time, type: Integer, values: {min: 0, max: 300, scale: 0, step: 1, unit: s}}
+  - {id: 114, code: adaptive_test, type: Boolean}
+  - {id: 115, code: factory_reset, type: Boolean}
+  - id: 116
+    code: movement_state
+    type: Enum
+    read_only: true
+    values: {range: [none, large_move, small_move, breathe, far, near]}
+  - {id: 117, code: small_move_self_test, type: Boolean}
+  - {id: 118, code: breath_self_test, type: Boolean}
+  - {id: 119, code: move_false_detection, type: Integer, values: {min: 0, max: 10, scale: 0, step: 1}}
+  - {id: 120, code: breath_false_detection, type: Boolean}
+  - id: 122
+    code: target_dis_closest
+    type: Integer
+    read_only: true
+    values: {min: 0, max: 1000, scale: 0, step: 1, unit: cm}

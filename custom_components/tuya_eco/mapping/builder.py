@@ -71,9 +71,10 @@ CAMERA_CATEGORIES = {"sp", "dghsxj"}
 class _Ctx:
     """Mutable state shared by the builders."""
 
-    def __init__(self, device: CloudDevice) -> None:
+    def __init__(self, device: CloudDevice, schema: dict[int, DpSpec] | None = None) -> None:
         self.device = device
-        self.by_code: dict[str, DpSpec] = {spec.code: spec for spec in device.dp_schema.values()}
+        schema = device.dp_schema if schema is None else schema
+        self.by_code: dict[str, DpSpec] = {spec.code: spec for spec in schema.values()}
         self.claimed: set[int] = set()
         self.defs: list[EntityDef] = []
 
@@ -165,6 +166,10 @@ def _build_lights(ctx: _Ctx) -> None:
         key = f"light{n}"
         name = None if (n == "" or (n == "_1" and not ctx.spec("switch_led_2"))) else f"Light {n[1:]}"
         _add_light(ctx, key, switch, bright, temp, colour, mode, name=name, suffix=n or "_1")
+        if n == "":
+            light_def = ctx.defs[-1]
+            _add_scene_select(ctx, mode)
+            _add_power_memory_select(ctx, light_def)
 
     # fs/fsd: a second plain light switch next to the main one
     if cat in ("fs", "fsd"):
@@ -227,6 +232,57 @@ def _add_light(
     if bmax:
         dps["brightness_max"] = bmax.dp_id
     ctx.add(EntityDef(Platform.LIGHT, key, dps, name=name, meta=meta))
+
+
+def _add_scene_select(ctx: _Ctx, mode: DpSpec | None) -> None:
+    """Built-in scenes of v1 bulbs (hex ``scene_data``) as a select."""
+    scene = ctx.spec("scene_data", type=DpType.STRING)
+    if scene is None or mode is None or mode.type != DpType.ENUM or "scene" not in _enum(mode):
+        return
+    ctx.add(
+        EntityDef(
+            Platform.SELECT,
+            "scene",
+            {"value": scene.dp_id, "mode": mode.dp_id},
+            name="Scene",
+            entity_category=EntityCategory.CONFIG,
+            icon="mdi:palette",
+            translation_key="scene",
+            meta={"scenes": dict(C.LIGHT_SCENES_V1)},
+        )
+    )
+
+
+def _add_power_memory_select(ctx: _Ctx, light: EntityDef) -> None:
+    """Power-on behaviour of a light (raw ``power_memory``: default / last state / custom).
+
+    The custom state is taken from the light's current DPs when the option is chosen, so
+    the select carries the light's DP roles too.
+    """
+    memory = ctx.spec("power_memory", type=DpType.RAW)
+    if memory is None:
+        return
+    dps = {"value": memory.dp_id}
+    for role in ("brightness", "color_temp", "color", "mode"):
+        if role in light.dps:
+            dps[role] = light.dps[role]
+    ctx.claim(memory)
+    ctx.defs.append(
+        EntityDef(
+            Platform.SELECT,
+            "power_memory",
+            dps,
+            name="Power-on behavior",
+            entity_category=EntityCategory.CONFIG,
+            icon="mdi:power-settings",
+            translation_key="power_memory",
+            meta={
+                "power_memory": True,
+                "options": list(C.POWER_MEMORY_MODES.values()),
+                "color": dict(light.meta.get("color") or {}),
+            },
+        )
+    )
 
 
 # ---------------------------------------------------------------------- covers
@@ -647,7 +703,11 @@ def _build_by_code(ctx: _Ctx) -> None:
                     name=rule.name or label,
                     device_class=rule.device_class,
                     entity_category=rule.entity_category,
-                    meta={"on_values": list(rule.on_values), "type": str(spec.type)},
+                    meta={
+                        "on_values": list(rule.on_values),
+                        "type": str(spec.type),
+                        "labels": list(spec.values.get("label") or []),
+                    },
                 )
             )
             continue
@@ -686,7 +746,7 @@ def _build_by_code(ctx: _Ctx) -> None:
                         {"value": spec.dp_id},
                         name=(number_rule.name if number_rule and number_rule.name else label),
                         device_class=number_rule.device_class if number_rule else None,
-                        unit=(number_rule.unit if number_rule and number_rule.unit else t.unit or None),
+                        unit=(number_rule.unit if number_rule and number_rule.unit else C.clean_unit(t.unit)),
                         entity_category=number_rule.entity_category if number_rule else EntityCategory.CONFIG,
                         icon=number_rule.icon if number_rule else None,
                         meta={"min": t.min, "max": t.max, "scale": t.scale, "step": t.step},
@@ -701,10 +761,10 @@ def _build_by_code(ctx: _Ctx) -> None:
                     Platform.SENSOR,
                     code,
                     {"value": spec.dp_id},
-                    name=label,
+                    name=sensor_rule.name if sensor_rule and sensor_rule.name else label,
                     device_class=sensor_rule.device_class if sensor_rule else None,
                     state_class=(sensor_rule.state_class if sensor_rule else SensorStateClass.MEASUREMENT),
-                    unit=(sensor_rule.unit if sensor_rule and sensor_rule.unit else t.unit or None),
+                    unit=(sensor_rule.unit if sensor_rule and sensor_rule.unit else C.clean_unit(t.unit)),
                     entity_category=sensor_rule.entity_category if sensor_rule else None,
                     icon=sensor_rule.icon if sensor_rule else None,
                     meta={
@@ -796,12 +856,17 @@ def synthesize_schema(dps: dict[str, Any]) -> dict[int, DpSpec]:
 
 def build_entities(device: CloudDevice) -> list[EntityDef]:
     """Return the entity definitions for a device."""
-    from .profiles import profile_entities  # noqa: PLC0415 - avoid import cycle at module load
+    from .profiles import device_profile  # noqa: PLC0415 - avoid import cycle at module load
 
-    profile = profile_entities(device)
+    profile = device_profile(device)
+    if profile and not profile.extend:
+        return list(profile.entities)
+    schema = {**device.dp_schema, **profile.dps} if profile else device.dp_schema
+    ctx = _Ctx(device, schema)
     if profile:
-        return profile
-    ctx = _Ctx(device)
+        # Explicit profile entities own their DPs; the generated ones must not claim them.
+        for entity in profile.entities:
+            ctx.claimed.update(entity.dps.values())
     _build_lights(ctx)
     _build_covers(ctx)
     _build_climate(ctx)
@@ -811,6 +876,14 @@ def build_entities(device: CloudDevice) -> list[EntityDef]:
     _build_alarms(ctx)
     _build_events(ctx)
     _build_by_code(ctx)
+    if profile:
+        keys = {e.key for e in profile.entities}
+        ctx.defs = [d for d in ctx.defs if d.key not in keys] + [
+            EntityDef.from_dict(e.as_dict()) for e in profile.entities
+        ]
+    # The connection sensor doubles as the device's diagnostics: it knows which DPs the
+    # entities cover, so it can show the raw values of the ones they do not.
+    mapped = sorted({dp for d in ctx.defs for dp in d.dps.values()})
     ctx.defs.append(
         EntityDef(
             Platform.SENSOR,
@@ -819,7 +892,12 @@ def build_entities(device: CloudDevice) -> list[EntityDef]:
             name="Connection",
             entity_category=EntityCategory.DIAGNOSTIC,
             icon="mdi:lan-connect",
-            meta={"type": "connection", "options": ["local", "cloud", "offline"]},
+            meta={
+                "type": "connection",
+                "options": ["local", "cloud", "offline"],
+                "mapped_dps": mapped,
+                "codes": {str(spec.dp_id): spec.code for spec in ctx.by_code.values()},
+            },
         )
     )
     assign_translation_keys(ctx.defs)

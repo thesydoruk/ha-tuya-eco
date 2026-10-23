@@ -112,8 +112,12 @@ The three "re-connected device" cases are all handled automatically:
 
 Entities are generated from the DP schema, not from a hand-written per-product table:
 
-1. `profiles/*.yaml` – optional explicit profiles keyed by `product_id` (highest priority,
-   tuya-local compatible shape).
+1. `profiles/*.yaml` – optional explicit profiles keyed by `product_id` (highest priority).
+   `mode: replace` (default) defines all entities by hand; `mode: extend` patches the cloud
+   schema instead — it adds vendor DPs the cloud does not list (e.g. the tuning DPs of mmWave
+   presence sensors), renames DPs the cloud maps wrongly, overrides enum ranges that differ on
+   the LAN, and appends explicit entities for DPs the code tables cannot express (string-valued
+   buttons and switches).
 2. `mapping/categories.py` – rules per Tuya `category` + DP `code` (ported from the
    knowledge in the core HA Tuya integration: e.g. `switch_led` → light, `temp_current`
    → temperature sensor, `fan_speed` → fan percentage).
@@ -124,6 +128,20 @@ Entities are generated from the DP schema, not from a hand-written per-product t
 Each rule produces an `EcoEntityDescription` (platform + HA entity description + DP ids).
 The result is cached in the config entry so entities are stable across restarts even
 when the cloud is unreachable.
+
+Units in the cloud spec are normalised by `codes.clean_unit` (`lux` → `lx`, `℃` → `°C`;
+placeholders such as `x` are dropped). Bitmap DPs that become binary sensors (`fault`)
+keep their bit labels so the entity can list the active faults as an attribute. Lights
+with a raw `power_memory` DP get a *Power-on behavior* select (`mapping/types.py`
+`PowerMemory` is the 12-byte codec: mode byte + custom HSV / brightness / colour
+temperature).
+
+The builder always appends a diagnostic **connection** sensor per device. Besides the
+transport in use its attributes carry the LAN host, protocol version, last error, last
+update and `unmapped_dps`: the raw values of every DP reported by the device that no
+entity uses (keyed by code when the schema knows the DP, else `dp_<id>`). That is the
+first place to look when a device has settings the integration does not show yet — the
+DP ids there go straight into an extending profile.
 
 ### 4. HA glue
 

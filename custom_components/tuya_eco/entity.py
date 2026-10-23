@@ -12,7 +12,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
-from .hub import EcoHub
+from .hub import EcoHub, device_model
 from .local.device import EcoDevice
 from .local.protocol import TuyaLocalError
 from .mapping import EntityDef
@@ -56,7 +56,8 @@ class EcoEntity(Entity):
             identifiers={(DOMAIN, device.id)},
             name=info.name,
             manufacturer=hub.provider.name.split(" (")[0],
-            model=info.product_name or info.product_id or None,
+            # Same value as the hub registers; anything else would overwrite it on every start.
+            model=device_model(info),
             model_id=info.product_id or None,
         )
 

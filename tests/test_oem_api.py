@@ -225,6 +225,9 @@ async def test_provider_fetches_schema_once_per_product(monkeypatch) -> None:
                 },
             ]
 
+        async def product_info(self, product_id):
+            return {}
+
         async def device_get(self, dev_id):
             calls.append(dev_id)
             if dev_id.startswith("bf0000000000000000a"):
@@ -246,3 +249,158 @@ async def test_provider_fetches_schema_once_per_product(monkeypatch) -> None:
     assert devices["bf0000000000000000a1"].status == {"switch_led": True, "bright_value": 500}
     assert devices["bf0000000000000000a1"].home_name == "Kyiv"
     assert devices["bf0000000000000000b3"].codes["switch_1"].dp_id == 1
+
+
+def test_category_name() -> None:
+    from custom_components.tuya_eco.mapping.codes import category_name
+
+    assert category_name("dj") == "Light"
+    assert category_name("dd") == "Light strip"
+    assert category_name("CZ") == "Socket"  # case-insensitive
+    assert category_name("qcshrefept0ubf12") is None  # unknown → caller falls back
+    assert category_name("") is None
+
+
+async def test_device_get_backfills_product_name_and_category(monkeypatch) -> None:
+    """When the device list omits productName/category, device.get fills them in (once per product)."""
+    from types import SimpleNamespace
+
+    from custom_components.tuya_eco.providers.ledvance import LedvanceProvider
+
+    schema = json.dumps([{"id": 20, "code": "switch_led", "mode": "rw", "type": "obj", "property": {"type": "bool"}}])
+    calls: list[str] = []
+
+    class FakeApi:
+        sid = "s"
+
+        async def groups(self):
+            return [{"groupId": 1, "name": "Kyiv"}]
+
+        async def devices(self, gid):
+            # list has neither productName nor category for this product
+            return [
+                {"devId": "bf0000000000000000a1", "name": "Lamp 1", "productId": "p1", "localKey": "k1", "dps": {}},
+                {"devId": "bf0000000000000000a2", "name": "Lamp 2", "productId": "p1", "localKey": "k2", "dps": {}},
+            ]
+
+        async def device_get(self, dev_id):
+            calls.append(dev_id)
+            return {"schema": schema, "pv": "3.4", "productName": "Smart Bulb E27", "category": "dj"}
+
+    provider = LedvanceProvider(SimpleNamespace())  # type: ignore[arg-type]
+    monkeypatch.setattr(provider, "_get_api", lambda: FakeApi())
+    devices = {d.id: d for d in await provider.async_fetch_devices()}
+
+    assert len(calls) == 1  # once per product id
+    # backfilled on the fetched device and on the cache-hit sibling
+    assert devices["bf0000000000000000a1"].product_name == "Smart Bulb E27"
+    assert devices["bf0000000000000000a1"].category == "dj"
+    assert devices["bf0000000000000000a2"].product_name == "Smart Bulb E27"
+    assert devices["bf0000000000000000a2"].category == "dj"
+
+
+async def test_device_get_does_not_override_list_values(monkeypatch) -> None:
+    """A productName already in the device list wins over device.get."""
+    from types import SimpleNamespace
+
+    from custom_components.tuya_eco.providers.ledvance import LedvanceProvider
+
+    schema = json.dumps([{"id": 20, "code": "switch_led", "mode": "rw", "type": "obj", "property": {"type": "bool"}}])
+
+    class FakeApi:
+        sid = "s"
+
+        async def groups(self):
+            return [{"groupId": 1, "name": "Kyiv"}]
+
+        async def devices(self, gid):
+            return [
+                {
+                    "devId": "bf0000000000000000a1",
+                    "name": "Lamp",
+                    "productId": "p1",
+                    "productName": "List Name",
+                    "category": "dd",
+                    "localKey": "k1",
+                    "dps": {},
+                }
+            ]
+
+        async def device_get(self, dev_id):
+            return {"schema": schema, "pv": "3.4", "productName": "Detail Name", "category": "dj"}
+
+    provider = LedvanceProvider(SimpleNamespace())  # type: ignore[arg-type]
+    monkeypatch.setattr(provider, "_get_api", lambda: FakeApi())
+    devices = {d.id: d for d in await provider.async_fetch_devices()}
+    assert devices["bf0000000000000000a1"].product_name == "List Name"
+    assert devices["bf0000000000000000a1"].category == "dd"
+
+
+def test_entity_device_info_uses_the_registered_model() -> None:
+    """Entities must announce the same model as the hub, or they overwrite it with the product id."""
+    from types import SimpleNamespace
+
+    from homeassistant.const import Platform
+
+    from custom_components.tuya_eco.entity import EcoEntity
+    from custom_components.tuya_eco.hub import device_model
+    from custom_components.tuya_eco.mapping import EntityDef
+    from custom_components.tuya_eco.providers.base import CloudDevice
+
+    info = CloudDevice(id="bf0000000000000000a1", name="Lamp", local_key="k", category="dj", product_id="qcshref")
+    assert device_model(info) == "Light"
+    device = SimpleNamespace(id=info.id, name=info.name, info=info)
+    hub = SimpleNamespace(provider=SimpleNamespace(name="Ledvance SMART+ (EU)"))
+    entity = EcoEntity(hub, device, EntityDef(Platform.SWITCH, "x", {"switch": 1}))  # type: ignore[arg-type]
+    assert entity.device_info["model"] == "Light"
+    assert entity.device_info["model_id"] == "qcshref"
+    info.product_name = "SMART+ Classic"
+    assert device_model(info) == "SMART+ Classic"
+
+
+async def test_product_card_supplies_the_model_name(monkeypatch) -> None:
+    """Ledvance: neither the list nor device.get name the product; product.info.get does (once per product)."""
+    from types import SimpleNamespace
+
+    from custom_components.tuya_eco.providers.ledvance import LedvanceProvider
+
+    schema = json.dumps([{"id": 20, "code": "switch_led", "mode": "rw", "type": "obj", "property": {"type": "bool"}}])
+    cards: list[str] = []
+
+    class FakeApi:
+        sid = "s"
+
+        async def groups(self):
+            return [{"groupId": 1, "name": "Kyiv"}]
+
+        async def devices(self, gid):
+            return [
+                {
+                    "devId": "bf0000000000000000a1",
+                    "name": "Lamp 1",
+                    "productId": "p1",
+                    "category": "dj",
+                    "localKey": "k1",
+                },
+                {
+                    "devId": "bf0000000000000000a2",
+                    "name": "Lamp 2",
+                    "productId": "p1",
+                    "category": "dj",
+                    "localKey": "k2",
+                },
+            ]
+
+        async def device_get(self, dev_id):
+            return {"schema": schema, "pv": "3.4"}
+
+        async def product_info(self, product_id):
+            cards.append(product_id)
+            return {"name": "LDVWIFIB40E14RGBW", "productId": product_id}
+
+    provider = LedvanceProvider(SimpleNamespace())  # type: ignore[arg-type]
+    monkeypatch.setattr(provider, "_get_api", lambda: FakeApi())
+    devices = {d.id: d for d in await provider.async_fetch_devices()}
+    assert cards == ["p1"]
+    assert devices["bf0000000000000000a1"].product_name == "LDVWIFIB40E14RGBW"
+    assert devices["bf0000000000000000a2"].product_name == "LDVWIFIB40E14RGBW"

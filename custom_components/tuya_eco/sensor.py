@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .entity import EcoEntity
 from .hub import EcoHub
@@ -29,10 +30,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class EcoConnectionSensor(EcoEntity, SensorEntity):
-    """Which channel serves the device: local, cloud or offline. Always available."""
+    """Which channel serves the device: local, cloud or offline. Always available.
+
+    Its attributes are the device's diagnostics: the LAN host and protocol version, the
+    last error, and the raw values of the DPs no entity covers (vendor DPs the cloud
+    schema does not list show up here first, which is how a profile gets written).
+    """
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["local", "cloud", "offline"]
+
+    def __init__(self, hub: EcoHub, device: EcoDevice, definition: EntityDef) -> None:
+        """Initialise."""
+        super().__init__(hub, device, definition)
+        self._mapped = {str(dp) for dp in definition.meta.get("mapped_dps", [])}
+        self._codes: dict[str, str] = {str(k): str(v) for k, v in (definition.meta.get("codes") or {}).items()}
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Link details and the DPs that have no entity of their own."""
+        device = self.device
+        values = {str(dp): value for dp, value in device.dps.items()}
+        unmapped = {
+            self._codes.get(dp, f"dp_{dp}"): (value[:255] if isinstance(value, str) else value)
+            for dp in sorted(values, key=lambda key: int(key) if key.isdigit() else 0)
+            if dp not in self._mapped
+            for value in (values[dp],)
+        }
+        last_update = getattr(device, "last_update", None)
+        return {
+            "host": getattr(device, "host", None),
+            "protocol_version": getattr(device, "version", None),
+            "last_error": getattr(device, "last_error", None),
+            "last_update": dt_util.utc_from_timestamp(last_update).isoformat() if last_update else None,
+            "unmapped_dps": unmapped,
+        }
 
     @property
     def available(self) -> bool:

@@ -46,6 +46,7 @@ class SensorRule:
     # Force a scale when the cloud spec lacks one (power often reports in 0.1 W).
     default_scale: int | None = None
     enabled_default: bool = True
+    name: str | None = None
 
 
 @dataclass(slots=True)
@@ -226,6 +227,14 @@ SENSORS: dict[str, SensorRule] = {
     # light / weather
     "bright_value_sensor": SensorRule(SensorDeviceClass.ILLUMINANCE, _M, LIGHT_LUX),
     "illuminance_value": SensorRule(SensorDeviceClass.ILLUMINANCE, _M, LIGHT_LUX),
+    "movement_state": SensorRule(SensorDeviceClass.ENUM, None, icon="mdi:cursor-move"),
+    "target_dis_closest": SensorRule(
+        SensorDeviceClass.DISTANCE,
+        _M,
+        UnitOfLength.CENTIMETERS,
+        icon="mdi:signal-distance-variant",
+        name="Target distance",
+    ),
     "bright_state": SensorRule(SensorDeviceClass.ENUM, None),
     "atmospheric_pressture": SensorRule(SensorDeviceClass.PRESSURE, _M, UnitOfPressure.HPA),
     "pressure_value": SensorRule(SensorDeviceClass.PRESSURE, _M),
@@ -360,6 +369,13 @@ SWITCHES: dict[str, SwitchRule] = {
     "switch_spray": SwitchRule(None, icon="mdi:spray"),
     "switch_disturb": SwitchRule(None, _CFG, "mdi:bell-off"),
     "do_not_disturb": SwitchRule(None, _CFG, "mdi:minus-circle"),
+    "remote_switch": SwitchRule(None, _CFG, "mdi:remote", "Remote control"),
+    "rf_pairing": SwitchRule(None, _CFG, "mdi:remote", "RF pairing"),
+    "buzzer": SwitchRule(None, _CFG, "mdi:volume-high"),
+    "adaptive_test": SwitchRule(None, _CFG, "mdi:test-tube"),
+    "small_move_self_test": SwitchRule(None, _CFG, "mdi:test-tube", "Small motion self-test"),
+    "breath_self_test": SwitchRule(None, _CFG, "mdi:test-tube", "Breathing self-test"),
+    "breath_false_detection": SwitchRule(None, _CFG, "mdi:lungs", "Breathing false detection"),
     "sleep": SwitchRule(None, _CFG, "mdi:power-sleep"),
     "sterilization": SwitchRule(None, _CFG, "mdi:bacteria"),
     "frost": SwitchRule(None, _CFG, "mdi:snowflake"),
@@ -432,7 +448,51 @@ NUMBERS: dict[str, NumberRule] = {
     "click_sustain_time": NumberRule(NumberDeviceClass.DURATION, UnitOfTime.SECONDS, icon="mdi:timer"),
     "far_detection": NumberRule(NumberDeviceClass.DISTANCE, UnitOfLength.CENTIMETERS, icon="mdi:signal-distance"),
     "near_detection": NumberRule(NumberDeviceClass.DISTANCE, UnitOfLength.CENTIMETERS, icon="mdi:signal-distance"),
-    "target_dis_closest": NumberRule(NumberDeviceClass.DISTANCE, UnitOfLength.CENTIMETERS, None),
+    # mmWave presence sensors (ZG-205W and relatives)
+    "move_sensitivity": NumberRule(None, None, icon="mdi:motion-sensor", name="Motion sensitivity"),
+    "move_distance": NumberRule(
+        NumberDeviceClass.DISTANCE,
+        UnitOfLength.CENTIMETERS,
+        icon="mdi:signal-distance",
+        name="Motion detection distance",
+    ),
+    "static_distance": NumberRule(
+        NumberDeviceClass.DISTANCE,
+        UnitOfLength.CENTIMETERS,
+        icon="mdi:signal-distance",
+        name="Stationary detection distance",
+    ),
+    "static_sensitivity": NumberRule(None, None, icon="mdi:motion-sensor", name="Stationary sensitivity"),
+    "small_move_sensitivity": NumberRule(None, None, icon="mdi:motion-sensor", name="Small motion sensitivity"),
+    "small_move_distance": NumberRule(
+        NumberDeviceClass.DISTANCE, UnitOfLength.CENTIMETERS, icon="mdi:signal-distance", name="Small motion distance"
+    ),
+    "move_min_distance": NumberRule(
+        NumberDeviceClass.DISTANCE, UnitOfLength.CENTIMETERS, icon="mdi:signal-distance", name="Motion minimum distance"
+    ),
+    "small_move_min_distance": NumberRule(
+        NumberDeviceClass.DISTANCE,
+        UnitOfLength.CENTIMETERS,
+        icon="mdi:signal-distance",
+        name="Small motion minimum distance",
+    ),
+    "breath_min_distance": NumberRule(
+        NumberDeviceClass.DISTANCE,
+        UnitOfLength.CENTIMETERS,
+        icon="mdi:signal-distance",
+        name="Breathing minimum distance",
+    ),
+    "none_delay_time": NumberRule(
+        NumberDeviceClass.DURATION, UnitOfTime.SECONDS, icon="mdi:timer-sand", name="Exit delay"
+    ),
+    "alarm_duration": NumberRule(NumberDeviceClass.DURATION, UnitOfTime.MINUTES, icon="mdi:timer"),
+    "adaptive_time": NumberRule(
+        NumberDeviceClass.DURATION, UnitOfTime.SECONDS, icon="mdi:timer", name="Adaptive test time"
+    ),
+    "move_false_detection": NumberRule(None, None, icon="mdi:alpha-x-circle", name="Motion false detection"),
+    "target_dis_closest": NumberRule(
+        NumberDeviceClass.DISTANCE, UnitOfLength.CENTIMETERS, None, name="Target distance"
+    ),
     "installation_height": NumberRule(NumberDeviceClass.DISTANCE, UnitOfLength.CENTIMETERS),
     "liquid_depth_max": NumberRule(NumberDeviceClass.DISTANCE, UnitOfLength.CENTIMETERS),
     "max_set": NumberRule(None, _P),
@@ -490,6 +550,7 @@ SELECTS: dict[str, SelectRule] = {
     "motion_sensitivity": SelectRule(icon="mdi:motion-sensor"),
     "ipc_work_mode": SelectRule(icon="mdi:cctv"),
     "alarm_volume": SelectRule(icon="mdi:volume-high"),
+    "alarm_mode": SelectRule(icon="mdi:alarm-light"),
     "alarm_state": SelectRule(icon="mdi:alarm-light"),
     "bright_state": SelectRule(icon="mdi:brightness-6"),
     "dehumidify_set_enum": SelectRule(icon="mdi:water-percent", entity_category=None),
@@ -518,6 +579,22 @@ SIREN_CODES: frozenset[str] = frozenset({"alarm_switch", "siren_switch"})
 # Categories whose plain `switch` / `switch_n` DPs are water valves.
 VALVE_CATEGORIES: frozenset[str] = frozenset({"ggq", "sfkzq"})
 
+# Factory scenes of v1 bulbs (hex `scene_data`; first byte = scene number). The values
+# are the Tuya defaults, as collected by tuya-local; a bulb may report other speeds or
+# colours for the same scene number, so the select matches on the number only.
+LIGHT_SCENES_V1: dict[str, str] = {
+    "night": "000c0d0000000000000000c80000",
+    "reading": "010e0d0000840000000003e801f4",
+    "working": "020e0d0000e80383000003e803e8",
+    "leisure": "030e0d00001403e8000001f401f4",
+    "soft": "04464602007803e803e800000000464602007803e8000a00000000",
+    "colorful": "05464601000003e803e800000000464601007803e803e80000000046460100f003e803e800000000"
+    "464601003d03e803e80000000046460100ae03e803e800000000464601011303e803e800000000",
+    "dazzling": "06464601000003e803e800000000464601007803e803e80000000046460100f003e803e800000000",
+    "gorgeous": "07464602000003e803e800000000464602007803e803e80000000046460200f003e803e800000000"
+    "464602003d03e803e80000000046460200ae03e803e800000000464602011303e803e800000000",
+}
+
 # Codes that are internal/noisy and should not become entities on their own.
 IGNORED_CODES: frozenset[str] = frozenset(
     {
@@ -528,10 +605,8 @@ IGNORED_CODES: frozenset[str] = frozenset(
         "rhythm_mode",
         "sleep_mode",
         "wakeup_mode",
-        "power_memory",
         "cycle_time",
         "random_time",
-        "remote_switch",
         "switch_inching",
         "cycle_schedule",
         "countdown_set_1",
@@ -553,6 +628,41 @@ IGNORED_CODES: frozenset[str] = frozenset(
     }
 )
 
+# Power-on behaviour of lights (raw ``power_memory`` DP, byte 1 = mode).
+POWER_MEMORY_MODES: dict[int, str] = {0: "default", 1: "memory", 2: "custom"}
+
+# Units as the cloud spells them → Home Assistant units. ``None`` drops a bogus unit
+# (the ZG-205W reports its sensitivity in "x").
+UNIT_ALIASES: dict[str, str | None] = {
+    "": None,
+    "x": None,
+    "X": None,
+    "lux": LIGHT_LUX,
+    "Lux": LIGHT_LUX,
+    "℃": UnitOfTemperature.CELSIUS,
+    "℉": UnitOfTemperature.FAHRENHEIT,
+    "C": UnitOfTemperature.CELSIUS,
+    "F": UnitOfTemperature.FAHRENHEIT,
+    "S": UnitOfTime.SECONDS,
+    "sec": UnitOfTime.SECONDS,
+    "Min": UnitOfTime.MINUTES,
+    "mins": UnitOfTime.MINUTES,
+    "H": UnitOfTime.HOURS,
+    "h": UnitOfTime.HOURS,
+    "hour": UnitOfTime.HOURS,
+    "KWh": UnitOfEnergy.KILO_WATT_HOUR,
+    "kwh": UnitOfEnergy.KILO_WATT_HOUR,
+}
+
+
+def clean_unit(unit: str | None) -> str | None:
+    """Normalise a unit string from a DP spec (``None`` when it is empty or meaningless)."""
+    if unit is None:
+        return None
+    text = str(unit).strip()
+    return UNIT_ALIASES.get(text, text) if text in UNIT_ALIASES else (text or None)
+
+
 _CHANNEL_RE = re.compile(r"^(?P<base>.+?)(?:_(?P<idx>\d+))?$")
 
 
@@ -568,3 +678,71 @@ def split_channel(code: str) -> tuple[str, int | None]:
 def pretty(code: str) -> str:
     """Human-readable name from a DP code."""
     return code.replace("_", " ").strip().capitalize()
+
+
+# Human-readable names for Tuya product categories. The category code is always
+# present on a device (the entity builders rely on it); it is the most reliable
+# source for a readable device "type" when the OEM API gives no ``productName``.
+# Unknown categories fall back to the product id at the call site.
+CATEGORY_NAMES: dict[str, str] = {
+    # Lighting
+    "dj": "Light",
+    "dd": "Light strip",
+    "dc": "String lights",
+    "fwd": "Ambient light",
+    "xdd": "Ceiling light",
+    "gyd": "Motion sensor light",
+    "tyndj": "Solar light",
+    "tgq": "Dimmer",
+    "tgkg": "Dimmer switch",
+    "ykq": "IR remote",
+    "fsd": "Ceiling fan light",
+    # Electrical
+    "cz": "Socket",
+    "pc": "Power strip",
+    "kg": "Switch",
+    "clkg": "Curtain switch",
+    "wxkg": "Scene switch",
+    "tdq": "Circuit breaker",
+    "dlq": "Circuit breaker",
+    # Climate
+    "wk": "Thermostat",
+    "wkf": "Radiator valve",
+    "qn": "Heater",
+    "kt": "Air conditioner",
+    "ktkzq": "AC controller",
+    "rs": "Water heater",
+    "fs": "Fan",
+    "fskg": "Fan switch",
+    "kj": "Air purifier",
+    "cs": "Dehumidifier",
+    "jsq": "Humidifier",
+    "xfj": "Fresh air system",
+    # Covers
+    "cl": "Curtain motor",
+    # Sensors & safety
+    "mcs": "Contact sensor",
+    "pir": "Motion sensor",
+    "rqbj": "Gas alarm",
+    "ywbj": "Smoke alarm",
+    "jwbj": "Methane alarm",
+    "sj": "Water leak sensor",
+    "wsdcg": "Temperature & humidity sensor",
+    "ldcg": "Luminance sensor",
+    "zd": "Vibration sensor",
+    "sos": "SOS button",
+    "co2bj": "CO2 detector",
+    "cobj": "CO detector",
+    # Other
+    "sp": "Camera",
+    "dghsxj": "Doorbell camera",
+    "sd": "Robot vacuum",
+    "mal": "Alarm host",
+    "cwwsq": "Pet feeder",
+    "ms": "Smart lock",
+}
+
+
+def category_name(category: str) -> str | None:
+    """Readable device type for a Tuya product category, or ``None`` if unknown."""
+    return CATEGORY_NAMES.get(category.strip().lower()) if category else None

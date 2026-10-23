@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from dataclasses import dataclass
 import json
+import struct
 from typing import Any
 
 
@@ -126,3 +129,53 @@ class BitmapType:
         except (TypeError, ValueError):
             return []
         return [label for i, label in enumerate(self.labels) if bits & (1 << i)]
+
+
+@dataclass(slots=True)
+class PowerMemory:
+    """Raw ``power_memory`` DP of lights: what the light does when mains power returns.
+
+    12 bytes, big-endian: version, mode (0 default / 1 last state / 2 custom), then the
+    custom state as hue (0-360), saturation (0-1000), value (0-1000), brightness and colour
+    temperature (raw light units). Transported as base64.
+    """
+
+    mode: int = 1
+    hue: int = 0
+    saturation: int = 0
+    value: int = 0
+    brightness: int = 0
+    color_temp: int = 0
+    version: int = 0
+
+    _FORMAT = ">BBHHHHH"
+
+    @classmethod
+    def decode(cls, raw: Any) -> PowerMemory | None:
+        """Parse the base64 DP value (``None`` when it is not a power-memory payload)."""
+        if not isinstance(raw, str) or not raw:
+            return None
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except (binascii.Error, ValueError):
+            return None
+        if len(data) < 2:
+            return None
+        data = data[:12].ljust(12, b"\0")
+        version, mode, h, s, v, bright, temp = struct.unpack(cls._FORMAT, data)
+        return cls(mode=mode, hue=h, saturation=s, value=v, brightness=bright, color_temp=temp, version=version)
+
+    def encode(self) -> str:
+        """Base64 DP value."""
+        clamp = lambda n: max(0, min(0xFFFF, int(n)))  # noqa: E731
+        data = struct.pack(
+            self._FORMAT,
+            self.version & 0xFF,
+            self.mode & 0xFF,
+            clamp(self.hue),
+            clamp(self.saturation),
+            clamp(self.value),
+            clamp(self.brightness),
+            clamp(self.color_temp),
+        )
+        return base64.b64encode(data).decode("ascii")

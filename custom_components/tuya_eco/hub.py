@@ -43,6 +43,7 @@ from .const import (
 from .local.device import EcoDevice
 from .local.discovery import TuyaDiscovery
 from .mapping import EntityDef, build_entities, synthesize_schema
+from .mapping.codes import category_name
 from .mapping.profiles import preload_profiles
 from .providers.base import BaseProvider, CloudDevice, ProviderAuthError, ProviderError, PushListener
 from .providers.registry import get_provider_class
@@ -50,6 +51,11 @@ from .providers.registry import get_provider_class
 _LOGGER = logging.getLogger(__name__)
 
 type EcoConfigEntry = ConfigEntry[EcoHub]
+
+
+def device_model(info: CloudDevice) -> str | None:
+    """Readable model for the device registry: product name, else the category, else the product id."""
+    return info.product_name or category_name(info.category) or info.product_id or None
 
 
 def get_discovery(hass: HomeAssistant) -> TuyaDiscovery:
@@ -271,7 +277,7 @@ class EcoHub(PushListener):
             config_entry_id=self.entry.entry_id,
             identifiers={(DOMAIN, info.id)},
             manufacturer=self.provider.name.split(" (")[0],
-            model=info.product_name or info.product_id or None,
+            model=device_model(info),
             model_id=info.product_id or None,
             name=info.name,
             **extra,

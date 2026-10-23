@@ -41,7 +41,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_setup_platform_entities(hass, entry, async_add_entities, Platform.LIGHT, EcoLight)
 
 
-def _decode_colour(raw: Any, v2: bool, s_max: int = 0, v_max: int = 0) -> tuple[float, float, float] | None:
+def decode_colour(raw: Any, v2: bool, s_max: int = 0, v_max: int = 0) -> tuple[float, float, float] | None:
     """Return (h 0-360, s 0-1, v 0-1) from Tuya colour data (hex string or JSON dict)."""
     if isinstance(raw, dict):
         try:
@@ -56,7 +56,7 @@ def _decode_colour(raw: Any, v2: bool, s_max: int = 0, v_max: int = 0) -> tuple[
     text = raw.strip()
     if text.startswith("{"):
         try:
-            return _decode_colour(json.loads(text), v2, s_max, v_max)
+            return decode_colour(json.loads(text), v2, s_max, v_max)
         except ValueError:
             return None
     try:
@@ -156,7 +156,7 @@ class EcoLight(EcoEntity, LightEntity):
     def brightness(self) -> int | None:
         """0-255."""
         if self.color_mode == ColorMode.HS:
-            hsv = _decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
+            hsv = decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
             return None if hsv is None else int(round(hsv[2] * 255))
         if self._bright is None:
             return None
@@ -184,7 +184,7 @@ class EcoLight(EcoEntity, LightEntity):
     @property
     def hs_color(self) -> tuple[float, float] | None:
         """HS colour."""
-        hsv = _decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
+        hsv = decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
         return None if hsv is None else (hsv[0], hsv[1] * 100)
 
     # ------------------------------------------------------------------ commands
@@ -208,7 +208,7 @@ class EcoLight(EcoEntity, LightEntity):
             return
 
         if hs is not None and "color" in self.definition.dps:
-            current = _decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
+            current = decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max)
             v = (brightness / 255) if brightness is not None else (current[2] if current else 1.0)
             dps[self.dp("color")] = _encode_colour(
                 hs[0], hs[1] / 100, max(0.01, v), self._colour_v2, self._s_max, self._v_max
@@ -223,7 +223,7 @@ class EcoLight(EcoEntity, LightEntity):
                 dps[self.dp("brightness")] = self._bright.remap_from(float(brightness), 0, 255)  # type: ignore[index]
         elif brightness is not None:
             if self.color_mode == ColorMode.HS and "color" in self.definition.dps and ATTR_WHITE not in kwargs:
-                current = _decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max) or (
+                current = decode_colour(self.dp_value("color"), self._colour_v2, self._s_max, self._v_max) or (
                     0.0,
                     0.0,
                     1.0,

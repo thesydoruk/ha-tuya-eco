@@ -20,18 +20,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class EcoSwitch(EcoEntity, SwitchEntity):
-    """A boolean DP."""
+    """A boolean DP (or a string DP with explicit ``on_value`` / ``off_value`` in meta)."""
 
     @property
     def is_on(self) -> bool | None:
         """State."""
         value = self.dp_value("switch")
-        return None if value is None else bool(value)
+        if value is None:
+            return None
+        if "on_value" in self.definition.meta:
+            return value == self.definition.meta["on_value"]
+        return bool(value)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """On."""
-        await self.async_write("switch", True)
+        await self.async_write("switch", self.definition.meta.get("on_value", True))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Off."""
-        await self.async_write("switch", False)
+        await self.async_write("switch", self.definition.meta.get("off_value", False))
