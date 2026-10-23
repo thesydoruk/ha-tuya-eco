@@ -40,3 +40,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # Brand assets live in home-assistant/brands; until that PR is merged
+          # the check cannot pass for a new integration.
+          ignore: brands
