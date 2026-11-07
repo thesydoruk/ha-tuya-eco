@@ -148,6 +148,8 @@ async def test_stale_entities_are_purged_on_setup(hass: HomeAssistant) -> None:
     hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_DEVICES_CACHE: [cached.as_dict()]})
     registry = er.async_get(hass)
     stale_a = registry.async_get_or_create("sensor", DOMAIN, f"{DEV_A}_old_thing", config_entry=entry)
+    # the relay used to be read-only: same unique_id, other platform
+    stale_a_platform = registry.async_get_or_create("binary_sensor", DOMAIN, f"{DEV_A}_switch_1", config_entry=entry)
     keep_a = registry.async_get_or_create("switch", DOMAIN, f"{DEV_A}_switch_1", config_entry=entry)
     keep_b = registry.async_get_or_create("switch", DOMAIN, f"{DEV_B}_whatever", config_entry=entry)
     orphan = registry.async_get_or_create("switch", DOMAIN, "bf0000000000000000zz9_switch_1", config_entry=entry)
@@ -162,6 +164,7 @@ async def test_stale_entities_are_purged_on_setup(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()
 
     assert registry.async_get(stale_a.entity_id) is None  # key no longer generated
+    assert registry.async_get(stale_a_platform.entity_id) is None  # same key, platform changed
     assert registry.async_get(orphan.entity_id) is None  # device not in the account
     assert registry.async_get(keep_a.entity_id) is not None  # still generated
     assert registry.async_get(keep_b.entity_id) is not None  # device without schema: untouched

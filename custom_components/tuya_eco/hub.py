@@ -160,20 +160,22 @@ class EcoHub(PushListener):
 
     @callback
     def _async_purge_stale_entities(self) -> int:
-        """Remove registry entries of this entry whose unique_id is no longer generated.
+        """Remove registry entries of this entry whose (platform, unique_id) is no longer generated.
 
         Keys change when a DP disappears from the schema, when a schema-less device
-        finally gets its real codes, or when a newer version renames a key; without
-        this, such entities would linger as "unavailable" forever. Devices whose
-        entity set is not known yet (no schema, never connected) are left alone, and
-        so are disabled devices.
+        finally gets its real codes, or when a newer version renames a key; the
+        platform changes when a DP flips between read-only and writable (a relay that
+        was a binary_sensor becomes a switch under the same unique_id). Without this,
+        such entities would linger as "unavailable" forever. Devices whose entity set
+        is not known yet (no schema, never connected) are left alone, and so are
+        disabled devices.
         """
         registry = er.async_get(self.hass)
-        expected: dict[str, set[str]] = {}
+        expected: dict[str, set[tuple[str, str]]] = {}
         for device in self.devices.values():
             defs = self.entity_defs(device)
             if defs:
-                expected[device.id] = {f"{device.id}_{d.key}" for d in defs}
+                expected[device.id] = {(str(d.platform.value), f"{device.id}_{d.key}") for d in defs}
         known_ids = set(self.cloud_devices) | self.disabled_devices
         removed = 0
         for reg_entry in er.async_entries_for_config_entry(registry, self.entry.entry_id):
@@ -182,11 +184,13 @@ class EcoHub(PushListener):
             if owner is None:
                 stale = True  # device is not in the account any more
             elif owner in expected:
-                stale = uid not in expected[owner]
+                stale = (reg_entry.domain, uid) not in expected[owner]
             else:
                 stale = False  # entity set unknown yet, keep
             if stale:
-                _LOGGER.info("%s: removing stale entity %s (%s)", self.entry.title, reg_entry.entity_id, uid)
+                _LOGGER.info(
+                    "%s: removing stale entity %s (%s/%s)", self.entry.title, reg_entry.entity_id, reg_entry.domain, uid
+                )
                 registry.async_remove(reg_entry.entity_id)
                 removed += 1
         return removed
