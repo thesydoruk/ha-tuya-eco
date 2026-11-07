@@ -33,6 +33,11 @@ def build_schema(spec: dict[str, Any]) -> dict[int, DpSpec]:
     """
     schema: dict[int, DpSpec] = {}
     writable = {str(f.get("code")) for f in spec.get("functions") or [] if isinstance(f, dict)}
+    # `status` and `functions` may name the same DP differently (e.g. `switch` vs `switch_1`),
+    # so a DP is also writable when any function entry carries its dp_id.
+    writable_dp_ids = {
+        int(f["dp_id"]) for f in spec.get("functions") or [] if isinstance(f, dict) and f.get("dp_id") is not None
+    }
     for group in (spec.get("status") or [], spec.get("functions") or []):
         for item in group:
             if not isinstance(item, dict) or "code" not in item or item.get("dp_id") is None:
@@ -49,7 +54,7 @@ def build_schema(spec: dict[str, Any]) -> dict[int, DpSpec]:
                 code=code,
                 type=parse_dp_type(item.get("type")),
                 values=parse_values(item.get("values")),
-                read_only=code not in writable,
+                read_only=code not in writable and dp_id not in writable_dp_ids,
             )
     return schema
 

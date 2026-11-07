@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import json
 import logging
+import re
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -59,6 +60,27 @@ def parse_dp_type(raw: str | None) -> DpType:
     if not raw:
         return DpType.RAW
     return _DPTYPE_ALIASES.get(str(raw).lower(), DpType.RAW)
+
+
+_CHANNEL_SUFFIX = re.compile(r"_\d+$")
+
+
+def spec_code_for(code: str, functions: dict[str, Any], status_range: dict[str, Any]) -> str | None:
+    """Return the code under which the cloud specification knows a DP.
+
+    The DP ⇄ code relation table and the function/status specification do not always
+    agree on the name of a DP: e.g. WIFI Smart Meter Pro (category ``dlq``) reports the
+    relay as ``switch`` in ``function``/``status_range`` but as ``switch_1`` in
+    ``dpStatusRelationDTOS``. An exact match wins; otherwise the code is tried without
+    its channel suffix (``switch_1`` → ``switch``) and with ``_1`` appended
+    (``switch`` → ``switch_1``). ``None`` when the specification does not know the DP.
+    """
+    if code in functions or code in status_range:
+        return code
+    for candidate in (_CHANNEL_SUFFIX.sub("", code), f"{code}_1"):
+        if candidate and candidate != code and (candidate in functions or candidate in status_range):
+            return candidate
+    return None
 
 
 def parse_values(raw: Any) -> dict[str, Any]:
@@ -263,7 +285,8 @@ class SmartLifeProvider(BaseProvider):
             dp_id = rel.get("dpId")
             if code is None or dp_id is None:
                 continue
-            spec_src = functions.get(code) or status_range.get(code)
+            spec_code = spec_code_for(str(code), functions, status_range)
+            spec_src = (functions.get(spec_code) or status_range.get(spec_code)) if spec_code else None
             raw_type = rel.get("valueType") or (getattr(spec_src, "type", None) if spec_src else None)
             values = parse_values(rel.get("valueDesc")) or parse_values(
                 getattr(spec_src, "values", None) if spec_src else None
@@ -273,7 +296,7 @@ class SmartLifeProvider(BaseProvider):
                 code=str(code),
                 type=parse_dp_type(raw_type),
                 values=values,
-                read_only=code not in functions,
+                read_only=spec_code not in functions,
             )
 
         return CloudDevice(

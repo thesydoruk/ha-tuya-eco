@@ -1,6 +1,6 @@
 [project]
 name = "ha-tuya-eco"
-version = "0.2.0"
+version = "0.2.1"
 description = "Modular Home Assistant integration for the Tuya ecosystem (Smart Life, Ledvance SMART+, …) with local control"
 requires-python = ">=3.12"
 
