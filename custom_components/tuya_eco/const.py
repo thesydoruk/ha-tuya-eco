@@ -44,6 +44,7 @@ DEFAULT_CLOUD_REFRESH_HOURS = 12
 DEFAULT_CLOUD_FALLBACK = True
 
 # Minimum spacing between cloud refreshes triggered by key failures.
+MAC_RETRY_COOLDOWN = 600.0  # seconds before a device missing from the ARP table is looked up again
 KEY_REFRESH_COOLDOWN = 300
 
 SIGNAL_NEW_DEVICES = f"{DOMAIN}_new_devices"

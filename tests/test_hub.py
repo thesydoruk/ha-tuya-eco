@@ -285,6 +285,15 @@ async def test_mac_from_arp_table_reaches_registry_and_diagnostics(hass: HomeAss
         hub._device_state_changed(device_a)
         await hass.async_block_till_done()
         assert arp.await_count == 1
+        # A device missing from the table is retried once the cooldown has passed.
+        device_b.lan_available = True
+        hub._device_state_changed(device_b)
+        await hass.async_block_till_done()
+        assert arp.await_count == 1
+        device_b.arp_checked -= 601
+        hub._device_state_changed(device_b)
+        await hass.async_block_till_done()
+        assert arp.await_count == 2
 
         diag = await async_get_config_entry_diagnostics(hass, entry)
     by_id = {d["id"]: d for d in diag["devices"]}

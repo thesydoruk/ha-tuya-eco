@@ -74,9 +74,11 @@ class EcoDevice(TuyaListener):
         self.host: str | None = host
         self.version: float | None = version
         # MAC from the host's ARP table when the cloud does not know it. `arp_host` is the
-        # host that lookup ran for, so a move to another IP triggers a new one.
+        # host that lookup ran for (a move to another IP triggers a new one) and
+        # `arp_checked` when it ran (a miss is retried after a cooldown).
         self.arp_mac: str | None = None
         self.arp_host: str | None = None
+        self.arp_checked: float = 0.0
         self.dps: dict[str, Any] = self._seed_from_cloud(info)
         self.lan_available = False
         # Cloud backup: when the provider pushes online/offline + state events, a device

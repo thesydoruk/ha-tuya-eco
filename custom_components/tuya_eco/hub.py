@@ -33,6 +33,7 @@ from .const import (
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
     KEY_REFRESH_COOLDOWN,
+    MAC_RETRY_COOLDOWN,
     OPT_CLOUD_FALLBACK,
     OPT_CLOUD_REFRESH_HOURS,
     OPT_DISABLED_DEVICES,
@@ -382,9 +383,9 @@ class EcoHub(PushListener):
     @staticmethod
     def _needs_mac_lookup(device: EcoDevice) -> bool:
         """LAN device without a MAC, reachable at a host its ARP lookup has not covered yet (not via a gateway)."""
-        if device.gateway is not None or not device.lan_available or not device.host:
+        if device.gateway is not None or not device.lan_available or not device.host or device.mac is not None:
             return False
-        return device.mac is None and device.arp_host != device.host
+        return device.arp_host != device.host or time.monotonic() - device.arp_checked > MAC_RETRY_COOLDOWN
 
     async def async_resolve_macs(self) -> None:
         """Fill in MACs from the host's ARP table for devices the cloud did not describe.
@@ -398,6 +399,7 @@ class EcoHub(PushListener):
         registry = dr.async_get(self.hass)
         for device in pending:
             device.arp_host = device.host
+            device.arp_checked = time.monotonic()
             mac = table.get(device.host or "")
             if not mac or mac == device.arp_mac:
                 continue
