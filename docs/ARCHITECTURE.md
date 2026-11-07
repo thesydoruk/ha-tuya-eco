@@ -137,7 +137,8 @@ with a raw `power_memory` DP get a *Power-on behavior* select (`mapping/types.py
 temperature).
 
 The builder always appends a diagnostic **connection** sensor per device. Besides the
-transport in use its attributes carry the LAN host, protocol version, last error, last
+transport in use its attributes carry the LAN host and MAC (from the cloud when it knows
+it, else from the host's ARP table — `local/arp.py`), protocol version, last error, last
 update and `unmapped_dps`: the raw values of every DP reported by the device that no
 entity uses (keyed by code when the schema knows the DP, else `dp_<id>`). That is the
 first place to look when a device has settings the integration does not show yet — the
@@ -152,7 +153,7 @@ DP ids there go straight into an extending profile.
   value scaling (`scale`, `step`, `min`, `max`), enum mapping.
 * `config_flow.py` – provider selection → provider-specific login steps → options
   (polling interval, cloud refresh interval, per-device protocol override).
-* `diagnostics.py` – redacted dump of devices, DP schema and link state.
+* `diagnostics.py` – redacted dump of devices (host, MAC, cloud IP), DP schema and link state.
 
 ## Design rules
 

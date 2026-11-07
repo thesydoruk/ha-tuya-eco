@@ -10,6 +10,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.tuya_eco.const import CONF_PROVIDER, CONF_PROVIDER_DATA, DOMAIN
+from custom_components.tuya_eco.diagnostics import async_get_config_entry_diagnostics
 from custom_components.tuya_eco.providers.base import CloudDevice
 
 DEV_A = "bf0000000000000000a1"
@@ -259,3 +260,35 @@ async def test_devices_grouped_by_home_subentries(hass: HomeAssistant) -> None:
     assert _subentries_of(dev_b) == {subs["h2"].subentry_id}
     hub = entry.runtime_data
     assert hub.subentry_for(hub.devices[DEV_A]) == subs["h1"].subentry_id
+
+
+async def test_mac_from_arp_table_reaches_registry_and_diagnostics(hass: HomeAssistant) -> None:
+    entry = _entry()
+    await _setup(hass, entry)
+    hub = entry.runtime_data
+    device_a, device_b = hub.devices[DEV_A], hub.devices[DEV_B]
+    assert device_a.mac is None
+    # The LAN link sets the host once it is up (connecting is mocked in this test).
+    device_a.host, device_b.host = "192.0.2.1", "192.0.2.2"
+    table = {"192.0.2.1": "d4:a6:51:00:11:22"}  # device B is not in the ARP cache
+
+    with patch("custom_components.tuya_eco.hub.async_arp_table", AsyncMock(return_value=table)) as arp:
+        device_a.lan_available = True
+        hub._device_state_changed(device_a)
+        await hass.async_block_till_done()
+        assert device_a.mac == "d4:a6:51:00:11:22"
+        assert device_b.mac is None
+        registry = dr.async_get(hass)
+        entry_a = registry.async_get_device(identifiers={(DOMAIN, DEV_A)})
+        assert (dr.CONNECTION_NETWORK_MAC, "d4:a6:51:00:11:22") in entry_a.connections
+        # The same host is not looked up again on the next state change.
+        hub._device_state_changed(device_a)
+        await hass.async_block_till_done()
+        assert arp.await_count == 1
+
+        diag = await async_get_config_entry_diagnostics(hass, entry)
+    by_id = {d["id"]: d for d in diag["devices"]}
+    assert by_id[DEV_A]["host"] == "192.0.2.1"
+    assert by_id[DEV_A]["mac"] == "d4:a6:51:00:11:22"
+    assert by_id[DEV_B]["host"] == "192.0.2.2"
+    assert by_id[DEV_B]["mac"] is None

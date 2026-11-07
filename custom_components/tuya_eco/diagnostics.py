@@ -32,6 +32,7 @@ TO_REDACT = {
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     """Return diagnostics."""
     hub = entry.runtime_data
+    await hub.async_resolve_macs()
     data = dict(entry.data)
     data.pop(CONF_DEVICES_CACHE, None)
     data[CONF_PROVIDER_DATA] = async_redact_data(data.get(CONF_PROVIDER_DATA, {}), TO_REDACT)

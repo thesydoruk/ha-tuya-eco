@@ -34,6 +34,7 @@ class _FakeDevice:
         self.available = True
         self.transport = "local"
         self.host = "192.168.1.20"
+        self.mac = "d4:a6:51:00:11:22"
         self.version = 3.4
         self.last_error = None
         self.last_update = 1_700_000_000.0
@@ -79,6 +80,7 @@ def test_connection_sensor_attributes_list_link_and_unmapped_dps() -> None:
     )
     attrs = entity.extra_state_attributes
     assert attrs["host"] == "192.168.1.20"
+    assert attrs["mac"] == "d4:a6:51:00:11:22"
     assert attrs["protocol_version"] == 3.4
     assert attrs["last_error"] is None
     assert attrs["last_update"].startswith("2023-11-14")

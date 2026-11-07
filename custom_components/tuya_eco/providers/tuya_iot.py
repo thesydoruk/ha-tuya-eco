@@ -138,6 +138,7 @@ class TuyaIotProvider(BaseProvider):
                     model=str(raw.get("model") or ""),
                     icon=str(raw.get("icon") or ""),
                     ip=str(raw["ip"]) if raw.get("ip") else None,
+                    mac=str(raw.get("mac") or ""),
                     online=raw.get("online"),
                     uuid=str(raw.get("uuid") or ""),
                     node_id=str(raw.get("node_id") or ""),

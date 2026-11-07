@@ -60,6 +60,7 @@ class EcoConnectionSensor(EcoEntity, SensorEntity):
         last_update = getattr(device, "last_update", None)
         return {
             "host": getattr(device, "host", None),
+            "mac": getattr(device, "mac", None),
             "protocol_version": getattr(device, "version", None),
             "last_error": getattr(device, "last_error", None),
             "last_update": dt_util.utc_from_timestamp(last_update).isoformat() if last_update else None,

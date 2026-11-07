@@ -408,6 +408,7 @@ def convert_mobile_device(raw: dict[str, Any], home_id: str = "", home_name: str
         model=str(raw.get("model") or ""),
         icon=str(raw.get("iconUrl") or raw.get("icon") or ""),
         ip=None,  # `localIp` is the WAN address; LAN discovery is authoritative
+        mac=str(raw.get("mac") or ""),
         online=raw.get("isOnline"),
         uuid=str(raw.get("uuid") or ""),
         node_id=str(raw.get("nodeId") or "") if gw_id != dev_id else "",

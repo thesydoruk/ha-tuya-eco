@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from ..local.arp import normalize_mac
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
@@ -89,6 +91,7 @@ class CloudDevice:
     model: str = ""
     icon: str = ""
     ip: str | None = None
+    mac: str = ""  # as reported by the cloud, when it knows it (normalised ``aa:bb:cc:dd:ee:ff``)
     online: bool | None = None
     uuid: str = ""
     node_id: str = ""  # sub-device id for zigbee/ble children behind a gateway
@@ -98,6 +101,10 @@ class CloudDevice:
     dp_schema: dict[int, DpSpec] = field(default_factory=dict)
     status: dict[str, Any] = field(default_factory=dict)
     protocol_version: str | None = None  # hint from provider, if known
+
+    def __post_init__(self) -> None:
+        """Normalise the fields clouds spell differently."""
+        self.mac = normalize_mac(self.mac) or ""
 
     @property
     def codes(self) -> dict[str, DpSpec]:
@@ -116,6 +123,7 @@ class CloudDevice:
             "model": self.model,
             "icon": self.icon,
             "ip": self.ip,
+            "mac": self.mac,
             "online": self.online,
             "uuid": self.uuid,
             "node_id": self.node_id,
@@ -144,6 +152,7 @@ class CloudDevice:
             model=str(data.get("model") or ""),
             icon=str(data.get("icon") or ""),
             ip=data.get("ip"),
+            mac=str(data.get("mac") or ""),
             online=data.get("online"),
             uuid=str(data.get("uuid") or ""),
             node_id=str(data.get("node_id") or ""),

@@ -149,6 +149,7 @@ def test_convert_mobile_device() -> None:
         "isOnline": True,
         "pv": "3.3",
         "localIp": "84.1.2.3",
+        "mac": "D4A651001122",
         "gwId": "bf000000000000000001",
         "dps": {"20": True, "22": 500},
         "schema": json.dumps(
@@ -167,11 +168,13 @@ def test_convert_mobile_device() -> None:
     device = convert_mobile_device(raw)
     assert device.local_key == "abcdefghijklmnop"
     assert device.ip is None  # WAN address must not be used
+    assert device.mac == "d4:a6:51:00:11:22"
     assert device.protocol_version == "3.3"
     assert device.status == {"switch_led": True, "bright_value": 500}
     assert device.gateway_id == "" and device.node_id == ""
     restored = type(device).from_dict(device.as_dict())
     assert restored.dp_schema[22].code == "bright_value"
+    assert restored.mac == "d4:a6:51:00:11:22"
 
 
 async def test_provider_fetches_schema_once_per_product(monkeypatch) -> None:

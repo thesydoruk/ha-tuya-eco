@@ -286,6 +286,7 @@ class SmartLifeProvider(BaseProvider):
             model=getattr(device, "model", "") or "",
             icon=getattr(device, "icon", "") or "",
             ip=getattr(device, "ip", None) or None,
+            mac=getattr(device, "mac", "") or "",
             online=getattr(device, "online", None),
             uuid=getattr(device, "uuid", "") or "",
             node_id=getattr(device, "node_id", "") or getattr(device, "nodeId", "") or "",

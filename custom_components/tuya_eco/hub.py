@@ -40,6 +40,7 @@ from .const import (
     OPT_POLL_INTERVAL,
     SIGNAL_NEW_DEVICES,
 )
+from .local.arp import async_arp_table
 from .local.device import EcoDevice
 from .local.discovery import TuyaDiscovery
 from .mapping import EntityDef, build_entities, synthesize_schema
@@ -87,6 +88,7 @@ class EcoHub(PushListener):
         self._refresh_lock = asyncio.Lock()
         self._unsub_timer: Any = None
         self._persist_handle: asyncio.TimerHandle | None = None
+        self._mac_task: asyncio.Task[None] | None = None
         self.last_cloud_error: str | None = None
         self.push_active = False
         # Devices skipped because another tuya_eco entry already controls them: id → that entry's title.
@@ -196,6 +198,8 @@ class EcoHub(PushListener):
         if self._persist_handle:
             self._persist_handle.cancel()
             self._persist_now()
+        if self._mac_task and not self._mac_task.done():
+            self._mac_task.cancel()
         await self.provider.async_stop_push()
         await asyncio.gather(*(d.async_stop() for d in self.devices.values()), return_exceptions=True)
         self.devices.clear()
@@ -273,6 +277,8 @@ class EcoHub(PushListener):
         # explicitly below (re-registering it under another subentry is deprecated).
         if subentry_id and existing is None:
             extra["config_subentry_id"] = subentry_id
+        if info.mac:
+            extra["connections"] = {(dr.CONNECTION_NETWORK_MAC, info.mac)}
         device_entry = registry.async_get_or_create(
             config_entry_id=self.entry.entry_id,
             identifiers={(DOMAIN, info.id)},
@@ -370,6 +376,35 @@ class EcoHub(PushListener):
         if device.version and self._versions.get(device.id) != device.version:
             self._versions[device.id] = device.version
             self._schedule_persist()
+        if self._needs_mac_lookup(device) and (self._mac_task is None or self._mac_task.done()):
+            self._mac_task = self.hass.async_create_task(self.async_resolve_macs())
+
+    @staticmethod
+    def _needs_mac_lookup(device: EcoDevice) -> bool:
+        """LAN device without a MAC, reachable at a host its ARP lookup has not covered yet (not via a gateway)."""
+        if device.gateway is not None or not device.lan_available or not device.host:
+            return False
+        return device.mac is None and device.arp_host != device.host
+
+    async def async_resolve_macs(self) -> None:
+        """Fill in MACs from the host's ARP table for devices the cloud did not describe.
+
+        Sub-devices behind a gateway are skipped: their host is the gateway's.
+        """
+        pending = [d for d in self.devices.values() if d.host and not d.info.mac and d.gateway is None]
+        if not pending:
+            return
+        table = await async_arp_table(self.hass)
+        registry = dr.async_get(self.hass)
+        for device in pending:
+            device.arp_host = device.host
+            mac = table.get(device.host or "")
+            if not mac or mac == device.arp_mac:
+                continue
+            device.arp_mac = mac
+            device_entry = self._device_by_identifier(registry, device.id)
+            if device_entry is not None:
+                registry.async_update_device(device_entry.id, merge_connections={(dr.CONNECTION_NETWORK_MAC, mac)})
 
     @callback
     def _device_host_changed(self, device: EcoDevice) -> None:

@@ -8,7 +8,7 @@ from typing import Any
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
@@ -52,7 +52,7 @@ class EcoEntity(Entity):
         if definition.meta.get("enabled_default") is False:
             self._attr_entity_registry_enabled_default = False
         info = device.info
-        self._attr_device_info = DeviceInfo(
+        device_info = DeviceInfo(
             identifiers={(DOMAIN, device.id)},
             name=info.name,
             manufacturer=hub.provider.name.split(" (")[0],
@@ -60,6 +60,10 @@ class EcoEntity(Entity):
             model=device_model(info),
             model_id=info.product_id or None,
         )
+        mac = getattr(device, "mac", None)
+        if mac:
+            device_info["connections"] = {(CONNECTION_NETWORK_MAC, mac)}
+        self._attr_device_info = device_info
 
     @property
     def available(self) -> bool:

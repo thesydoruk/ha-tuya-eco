@@ -73,6 +73,10 @@ class EcoDevice(TuyaListener):
         self.poll_interval = poll_interval
         self.host: str | None = host
         self.version: float | None = version
+        # MAC from the host's ARP table when the cloud does not know it. `arp_host` is the
+        # host that lookup ran for, so a move to another IP triggers a new one.
+        self.arp_mac: str | None = None
+        self.arp_host: str | None = None
         self.dps: dict[str, Any] = self._seed_from_cloud(info)
         self.lan_available = False
         # Cloud backup: when the provider pushes online/offline + state events, a device
@@ -130,6 +134,11 @@ class EcoDevice(TuyaListener):
         if self.cloud_backup and self.cloud_online is True:
             return "cloud"
         return "offline"
+
+    @property
+    def mac(self) -> str | None:
+        """MAC address: from the cloud when it knows it, else from the host's ARP table."""
+        return self.info.mac or self.arp_mac
 
     @callback
     def set_cloud_online(self, online: bool | None) -> None:
@@ -512,6 +521,8 @@ class EcoDevice(TuyaListener):
             "id": self.id,
             "name": self.name,
             "host": self.host,
+            "mac": self.mac,
+            "cloud_ip": self.info.ip,
             "version": self.version,
             "available": self.available,
             "transport": self.transport,
