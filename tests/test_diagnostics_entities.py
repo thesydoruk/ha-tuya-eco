@@ -5,14 +5,16 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from homeassistant.components.climate import ClimateEntity, HVACAction
 from homeassistant.const import Platform
 
 from custom_components.tuya_eco.binary_sensor import EcoBinarySensor
+from custom_components.tuya_eco.climate import EcoClimate
 from custom_components.tuya_eco.mapping import PowerMemory, build_entities
 from custom_components.tuya_eco.mapping.codes import clean_unit
 from custom_components.tuya_eco.providers.base import CloudDevice, DpSpec, DpType
 from custom_components.tuya_eco.select import EcoSelect
-from custom_components.tuya_eco.sensor import EcoConnectionSensor
+from custom_components.tuya_eco.sensor import EcoConnectionSensor, EcoIpAddressSensor
 
 
 def _dev(category: str, specs: list[tuple[int, str, DpType, dict, bool]], product_id: str = "") -> CloudDevice:
@@ -88,6 +90,25 @@ def test_connection_sensor_attributes_list_link_and_unmapped_dps() -> None:
     assert attrs["unmapped_dps"]["dp_101"] == 7
     assert len(attrs["unmapped_dps"]["dp_102"]) == 255
     assert entity.native_value == "local"
+
+
+def test_ip_address_sensor_shows_the_lan_host() -> None:
+    defs = _keys(build_entities(_energy_plug()))
+    ip = defs[(Platform.SENSOR, "ip_address")]
+    assert ip.entity_category == "diagnostic" and ip.translation_key == "ip_address"
+    entity, device = _entity(EcoIpAddressSensor, ip, {})
+    assert entity.native_value == "192.168.1.20"
+    device.host = None
+    assert entity.native_value is None
+    assert entity.available is True
+
+
+def test_sub_devices_get_no_ip_address_sensor() -> None:
+    plug = _energy_plug()
+    plug.gateway_id, plug.node_id = "gw1", "0001"
+    keys = _keys(build_entities(plug))
+    assert (Platform.SENSOR, "ip_address") not in keys
+    assert (Platform.SENSOR, "connection") in keys
 
 
 # ---------------------------------------------------------------------- fault bits
@@ -197,3 +218,28 @@ async def test_power_on_behavior_custom_without_light_state() -> None:
     assert entity.current_option is None
     await entity.async_select_option("custom")
     assert PowerMemory.decode(device.written[0][33]) == PowerMemory(mode=2)
+
+
+# ---------------------------------------------------------------------- climate temperature API
+
+
+def test_climate_serves_old_and_native_temperature_api() -> None:
+    thermostat = _dev(
+        "wk",
+        [
+            (1, "switch", DpType.BOOLEAN, {}, False),
+            (2, "temp_set", DpType.INTEGER, {"min": 50, "max": 300, "scale": 1, "step": 5, "unit": "℃"}, False),
+            (3, "temp_current", DpType.INTEGER, {"min": -200, "max": 600, "scale": 1, "step": 1}, True),
+            (4, "mode", DpType.ENUM, {"range": ["auto", "manual"]}, False),
+        ],
+    )
+    definition = next(d for d in build_entities(thermostat) if d.platform == Platform.CLIMATE)
+    entity, _ = _entity(EcoClimate, definition, {"1": True, "2": 215, "3": 203, "4": "manual"})
+    assert entity.native_current_temperature == 20.3
+    assert entity.native_target_temperature == 21.5
+    # Old names keep working: served by the core (HA ≥ 2026.11) or by the entity itself.
+    assert entity.current_temperature == 20.3
+    assert entity.target_temperature == 21.5
+    assert entity.hvac_action == HVACAction.HEATING
+    native_unit = hasattr(ClimateEntity, "native_temperature_unit")
+    assert (entity.native_temperature_unit if native_unit else entity.temperature_unit) == "°C"

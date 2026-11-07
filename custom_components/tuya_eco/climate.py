@@ -28,7 +28,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_setup_platform_entities(hass, entry, async_add_entities, Platform.CLIMATE, EcoClimate)
 
 
-class EcoClimate(EcoEntity, ClimateEntity):
+# HA 2026.11 renamed the temperature members to ``native_*`` and deprecated the old ones
+# (gone in 2027.11); older cores only know the old names. The entity implements the native
+# API and serves the old names itself where the core does not.
+_NATIVE_TEMPERATURE = hasattr(ClimateEntity, "native_current_temperature")
+
+if _NATIVE_TEMPERATURE:
+
+    class _TemperatureCompat:
+        """Nothing to add: the core maps the old names onto the native ones."""
+
+else:
+
+    class _TemperatureCompat:
+        """Old temperature API served from the native properties."""
+
+        @property
+        def current_temperature(self) -> float | None:
+            """Current."""
+            return self.native_current_temperature  # type: ignore[attr-defined]
+
+        @property
+        def target_temperature(self) -> float | None:
+            """Target."""
+            return self.native_target_temperature  # type: ignore[attr-defined]
+
+
+class EcoClimate(EcoEntity, _TemperatureCompat, ClimateEntity):
     """Generic Tuya climate."""
 
     _attr_target_temperature_step = 0.5
@@ -41,9 +67,11 @@ class EcoClimate(EcoEntity, ClimateEntity):
         self._cur = IntegerType.from_values(meta.get("temp_current")) if "temp_current" in definition.dps else None
         self._mode_map: dict[str, str] = dict(meta.get("hvac_modes") or {})  # tuya → hvac
         self._presets: list[str] = [str(p) for p in meta.get("presets", [])]
-        self._attr_temperature_unit = (
-            UnitOfTemperature.FAHRENHEIT if meta.get("unit") == "°F" else UnitOfTemperature.CELSIUS
-        )
+        unit = UnitOfTemperature.FAHRENHEIT if meta.get("unit") == "°F" else UnitOfTemperature.CELSIUS
+        if _NATIVE_TEMPERATURE:
+            self._attr_native_temperature_unit = unit
+        else:
+            self._attr_temperature_unit = unit
         self._attr_min_temp = self._set.min_scaled
         self._attr_max_temp = self._set.max_scaled if self._set.max > self._set.min else 35
         self._attr_target_temperature_step = self._set.step_scaled
@@ -97,15 +125,15 @@ class EcoClimate(EcoEntity, ClimateEntity):
         self._attr_hvac_modes = modes
 
     @property
-    def current_temperature(self) -> float | None:
-        """Current."""
+    def native_current_temperature(self) -> float | None:
+        """Current, in the device's unit."""
         if self._cur is None:
             return None
         return self._cur.scale_value(self.dp_value("temp_current"))
 
     @property
-    def target_temperature(self) -> float | None:
-        """Target."""
+    def native_target_temperature(self) -> float | None:
+        """Target, in the device's unit."""
         return self._set.scale_value(self.dp_value("temp_set"))
 
     @property
@@ -135,12 +163,12 @@ class EcoClimate(EcoEntity, ClimateEntity):
         if mode == HVACMode.OFF:
             return HVACAction.OFF
         if mode == HVACMode.HEAT:
-            cur, tgt = self.current_temperature, self.target_temperature
+            cur, tgt = self.native_current_temperature, self.native_target_temperature
             if cur is not None and tgt is not None:
                 return HVACAction.HEATING if cur < tgt else HVACAction.IDLE
             return HVACAction.HEATING
         if mode == HVACMode.COOL:
-            cur, tgt = self.current_temperature, self.target_temperature
+            cur, tgt = self.native_current_temperature, self.native_target_temperature
             if cur is not None and tgt is not None:
                 return HVACAction.COOLING if cur > tgt else HVACAction.IDLE
             return HVACAction.COOLING

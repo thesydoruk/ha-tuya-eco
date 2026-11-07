@@ -118,7 +118,7 @@ Anything unknown falls back to a sensible generic entity by DP type, and a diagn
 download shows the full schema and link state. Every device also gets a diagnostic
 **Connection** sensor (`local` / `cloud` / `offline`) whose attributes are the LAN host and MAC,
 protocol version, last error and the raw values of the DPs no entity covers — vendor DPs
-the cloud does not list show up there first. Custom profiles: drop a YAML file in
+the cloud does not list show up there first, plus a diagnostic **IP address** sensor. Custom profiles: drop a YAML file in
 `custom_components/tuya_eco/profiles/` keyed by product id (format documented in
 `mapping/profiles.py`); `mode: extend` adds such DPs on top of the automatic mapping.
 

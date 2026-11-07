@@ -142,7 +142,8 @@ it, else from the host's ARP table — `local/arp.py`), protocol version, last e
 update and `unmapped_dps`: the raw values of every DP reported by the device that no
 entity uses (keyed by code when the schema knows the DP, else `dp_<id>`). That is the
 first place to look when a device has settings the integration does not show yet — the
-DP ids there go straight into an extending profile.
+DP ids there go straight into an extending profile. A diagnostic **IP address** sensor
+shows the LAN host on the device page (skipped for sub-devices, whose host is the gateway's).
 
 ### 4. HA glue
 

@@ -22,8 +22,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     """Set up sensors."""
 
     def factory(hub: EcoHub, device: EcoDevice, definition: EntityDef) -> EcoSensor:
-        if definition.meta.get("type") == "connection":
+        kind = definition.meta.get("type")
+        if kind == "connection":
             return EcoConnectionSensor(hub, device, definition)
+        if kind == "ip_address":
+            return EcoIpAddressSensor(hub, device, definition)
         return EcoSensor(hub, device, definition)
 
     async_setup_platform_entities(hass, entry, async_add_entities, Platform.SENSOR, factory)
@@ -83,6 +86,20 @@ class EcoConnectionSensor(EcoEntity, SensorEntity):
         return {"local": "mdi:lan-connect", "cloud": "mdi:cloud-outline", "offline": "mdi:lan-disconnect"}[
             self.device.transport
         ]
+
+
+class EcoIpAddressSensor(EcoEntity, SensorEntity):
+    """LAN address the device was last reached at (unknown until the first link)."""
+
+    @property
+    def available(self) -> bool:
+        """Shown even when the device itself is unreachable."""
+        return True
+
+    @property
+    def native_value(self) -> str | None:
+        """Host."""
+        return getattr(self.device, "host", None)
 
 
 class EcoSensor(EcoEntity, SensorEntity):

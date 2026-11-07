@@ -900,6 +900,19 @@ def build_entities(device: CloudDevice) -> list[EntityDef]:
             },
         )
     )
+    # The LAN address is otherwise only an attribute; a sub-device shares its gateway's.
+    if not device.gateway_id:
+        ctx.defs.append(
+            EntityDef(
+                Platform.SENSOR,
+                "ip_address",
+                {},
+                name="IP address",
+                entity_category=EntityCategory.DIAGNOSTIC,
+                icon="mdi:ip-network",
+                meta={"type": "ip_address"},
+            )
+        )
     assign_translation_keys(ctx.defs)
     _LOGGER.debug(
         "%s (%s): %d entities from %d DPs", device.name, device.category, len(ctx.defs), len(device.dp_schema)
@@ -923,7 +936,7 @@ _KNOWN_KEYS: dict[Platform, frozenset[str]] = {
     Platform.BINARY_SENSOR: frozenset(C.BINARY_SENSORS),
     Platform.NUMBER: frozenset(C.NUMBERS),
     Platform.SELECT: frozenset(C.SELECTS),
-    Platform.SENSOR: frozenset(C.SENSORS) | {"bright_value", "connection"},
+    Platform.SENSOR: frozenset(C.SENSORS) | {"bright_value", "connection", "ip_address"},
     Platform.BUTTON: frozenset(C.BUTTONS),
     Platform.LIGHT: frozenset({"floodlight", "indicator", "night_light", "backlight"}),
     Platform.COVER: frozenset({"blind"}),

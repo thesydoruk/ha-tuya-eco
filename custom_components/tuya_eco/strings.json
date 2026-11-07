@@ -895,6 +895,9 @@
       "inverter_output_power": {
         "name": "Inverter output power"
       },
+      "ip_address": {
+        "name": "IP address"
+      },
       "level_current": {
         "name": "Level current"
       },
