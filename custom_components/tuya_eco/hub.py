@@ -404,7 +404,8 @@ class EcoHub(PushListener):
             device.arp_mac = mac
             device_entry = self._device_by_identifier(registry, device.id)
             if device_entry is not None:
-                registry.async_update_device(device_entry.id, merge_connections={(dr.CONNECTION_NETWORK_MAC, mac)})
+                connections = set(device_entry.connections) | {(dr.CONNECTION_NETWORK_MAC, mac)}
+                registry.async_update_device(device_entry.id, new_connections=connections)
 
     @callback
     def _device_host_changed(self, device: EcoDevice) -> None:
