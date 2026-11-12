@@ -150,7 +150,9 @@ class EcoHub(PushListener):
         await asyncio.gather(*(d.async_start() for d in self.devices.values()))
         self._async_purge_stale_entities()
 
+        self.provider.update_known_devices(list(self.cloud_devices.values()))
         self.push_active = await self.provider.async_start_push(self)
+        self._apply_cloud_backup()
         if self.push_active:
             _LOGGER.debug("%s: cloud push channel connected", self.entry.title)
 
@@ -263,7 +265,8 @@ class EcoHub(PushListener):
             on_key_invalid=self._device_key_invalid,
             on_host_changed=self._device_host_changed,
         )
-        device.cloud_backup = self.cloud_fallback and self.provider.supports_push
+        # Only a live push channel keeps the cloud's view of the device current.
+        device.cloud_backup = self.cloud_fallback and self.provider.supports_push and self.push_active
         self.devices[info.id] = device
         device.async_add_listener(lambda dev=device: self._device_state_changed(dev))
         self._register_device(info)
@@ -503,7 +506,15 @@ class EcoHub(PushListener):
             self.hass.async_create_task(self._async_resubscribe_push())
 
     async def _async_resubscribe_push(self) -> None:
+        self.provider.update_known_devices(list(self.cloud_devices.values()))
         self.push_active = await self.provider.async_start_push(self)
+        self._apply_cloud_backup()
+
+    @callback
+    def _apply_cloud_backup(self) -> None:
+        enabled = self.cloud_fallback and self.provider.supports_push and self.push_active
+        for device in self.devices.values():
+            device.set_cloud_backup(enabled)
 
     # ------------------------------------------------------------------ cloud push events
 

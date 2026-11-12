@@ -17,6 +17,7 @@ LEDVANCE = OemAppProfile(
     secret="A_armptsqyfpxa4ftvtc739ardncett3uy_cgqx3ku34mh5qdesd7fcaru3gx7tyurr",
     regions=("EU", "US", "CN", "IN"),
     default_region="EU",
+    package="com.ledvance.smartplus",
 )
 
 SYLVANIA = OemAppProfile(

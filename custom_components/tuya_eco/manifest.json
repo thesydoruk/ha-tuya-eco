@@ -9,6 +9,6 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/thesydoruk/ha-tuya-eco/issues",
   "loggers": ["custom_components.tuya_eco", "tuya_sharing"],
-  "requirements": ["tuya-device-sharing-sdk>=0.2.1"],
+  "requirements": ["tuya-device-sharing-sdk>=0.2.1", "paho-mqtt>=1.6.1"],
   "version": "0.2.2"
 }

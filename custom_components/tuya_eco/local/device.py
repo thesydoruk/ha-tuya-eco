@@ -143,6 +143,14 @@ class EcoDevice(TuyaListener):
         return self.info.mac or self.arp_mac
 
     @callback
+    def set_cloud_backup(self, enabled: bool) -> None:
+        """Turn the cloud backup on or off (the provider's push channel came up or failed)."""
+        if enabled == self.cloud_backup:
+            return
+        self.cloud_backup = enabled
+        self._notify()
+
+    @callback
     def set_cloud_online(self, online: bool | None) -> None:
         """Cloud online/offline event."""
         if online == self.cloud_online:

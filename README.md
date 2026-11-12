@@ -80,7 +80,7 @@ Devices appear automatically as soon as they are found on the LAN. UDP ports 666
 |---|---|---|
 | Full poll interval | 30 s | How often the full DP state is re-read (push updates arrive instantly anyway). |
 | Cloud refresh interval | 12 h | Periodic re-sync of devices/keys from the cloud. `0` = only when a key stops working. |
-| Cloud fallback | on | Send commands through the cloud when the device is unreachable on the LAN. |
+| Cloud fallback | on | Keep a device usable through the cloud while it is unreachable on the LAN: commands go through the cloud, and with Smart Life, Ledvance, Sylvania and other mobile-app accounts its state and online status follow the cloud's push channel. |
 
 ## How recovery works
 
@@ -89,6 +89,7 @@ Devices appear automatically as soon as they are found on the LAN. UDP ports 666
 | Device got a new IP | Its discovery broadcast (or the reply to our probe on port 7000) carries the new address; the link is re-created immediately. |
 | Device was off / unreachable | Reconnects with back-off (5 s → 5 min) and instantly when its broadcast is seen again. |
 | Device re-paired in the app | The local key rejected twice in a row triggers a cloud refresh (rate-limited to once per 5 min); the device reconnects with the new key. New devices found during the refresh are added live. |
+| Device unreachable on the LAN, online in the cloud | With *Cloud fallback* on and a push-capable account it stays available (connection sensor `cloud`); reports and commands go through the cloud until the LAN link is back. |
 | Cloud down / credentials expired | Cached devices, keys and entities keep working. A re-auth prompt is raised when the session is invalid. |
 
 ## Entities

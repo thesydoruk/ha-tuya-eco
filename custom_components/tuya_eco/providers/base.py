@@ -281,6 +281,9 @@ class BaseProvider(ABC):
         """Optional cloud fallback for commands (code/value dicts). Default: unsupported."""
         return False
 
+    def update_known_devices(self, devices: list[CloudDevice]) -> None:
+        """The devices the hub manages (also when they come from the entry cache). Default: ignored."""
+
     async def async_start_push(self, listener: PushListener) -> bool:
         """Subscribe to cloud push events, if the provider has such a channel. Idempotent."""
         return False

@@ -36,6 +36,45 @@ and the open localtuya PRs #1131 / #2301 use. It has been working continuously s
 The provider throttles device-list refreshes to once per 5 minutes and prefers the silent
 session refresh to avoid rate limits and login notifications.
 
+## Cloud backup: the app's MQTT session (implemented in `providers/oem_mqtt.py`)
+
+The SMART+ app keeps an MQTT session with the Tuya broker for live updates and commands. The
+integration opens the same session so that a bulb that is unreachable on the LAN (Wi-Fi
+trouble, VLAN, the host's network) stays visible and controllable through the cloud. It is a
+**backup only**: while the LAN link is up, cloud reports are ignored and commands go over the
+LAN. The *Cloud fallback* option switches it off.
+
+Verified live with a SMART+ account (31 bulbs, protocol 2.2 and 2.3 firmware):
+
+* Broker: `domain.mobileMqttsUrl:mqttsPort` from the login result (EU: `m1.tuyaeu.com:8883`), TLS.
+* Credentials: username = `sid`, password = `md5(ecode)[8:24]`; `ecode` comes with the
+  password login (the silent refresh may omit it, so it is stored with the entry). Client id
+  `<package>_mb_<random per installation>_<md5(uid + "sdkfasodifca")>_DEFAULT`; a will message
+  on `tuya/smart/will` like the app's.
+* Topics: `smart/mb/in/<devId>` (reports) and `smart/mb/out/<devId>` (commands), one exact topic
+  per device; wildcards are refused.
+* Frames, keyed by the device's `localKey`:
+  * `2.2`: `"2.2" | crc32(frame[7:]) | seq | origin | AES-128-ECB(json)` (big-endian);
+  * `2.3`: `"2.3" | seq | origin | 0x00` (the 12 bytes are the GCM AAD) `| nonce(12) | ciphertext | tag(16)`.
+* Messages: `protocol 4` → `data.dps` report; `protocol 1`, `type: "update"` with
+  `data.online: false` when the device drops off. No "online" event was seen: any report counts as
+  online.
+* A bulb reports to the cloud when its state changes **and whenever the LAN side polls it** (the
+  DP 30–33 reports every 30 s come from the integration's own poll). A bulb the LAN cannot reach
+  is therefore silent on MQTT. Cached "online" flags are not trusted after the channel (re)connects,
+  so 90 s later the devices that have not reported are asked about once through
+  `tuya.m.device.get` (`isOnline`, at most 30 devices). Tested by blackholing one bulb's IP on the
+  HA host: the bulb switched to `cloud` within 24 s and on/off from the HA UI reached it.
+* Commands: `{"data":{"dps":{…}},"protocol":5,"t":<unix s>}` in the frame version the device itself
+  sends (the cloud `pv` field is empty for these bulbs, so the version is learned from its
+  reports); `seq` counts up per session, `origin` is random. The broker does not echo these
+  publishes to other subscribers of `smart/mb/out/…`. PUBACK ≈ 40 ms, the device's report
+  ≈ 90 ms later. Without a known version, for sub-devices, or without PUBACK the command goes
+  through the HTTP `tuya.m.device.dp.publish` instead.
+
+`scripts/probe_oem_push.py` reproduces the measurements (`--ha-config /config` inside the HA
+container takes the account from the installed integration; `--blink <device>` tests commands).
+
 ## App identifiers
 
 The SMART+ (and Sylvania) client id / secret live in `providers/oem_profiles.py`. They are the

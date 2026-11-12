@@ -26,6 +26,8 @@ TO_REDACT = {
     "user_code",
     "terminal_id",
     "email",
+    "ecode",
+    "mqtt_id",
 }
 
 

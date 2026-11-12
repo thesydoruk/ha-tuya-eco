@@ -13,11 +13,13 @@ An *app profile* holds the identifiers of one such app. Profiles are registered 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 from typing import Any
 import uuid
@@ -36,6 +38,16 @@ from .base import (
     LoginStep,
     ProviderAuthError,
     ProviderError,
+    PushListener,
+)
+from .oem_mqtt import (
+    AUTH_REFUSED,
+    OemMqttChannel,
+    decode_frame,
+    encode_command,
+    mqtt_client_id,
+    mqtt_host_for,
+    mqtt_password,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,6 +60,19 @@ CONF_SID = "sid"
 CONF_REFRESH_TOKEN = "refresh_token"
 CONF_CLIENT_ID = "client_id"
 CONF_SECRET = "secret"
+CONF_ECODE = "ecode"
+CONF_UID = "uid"
+CONF_MQTT_HOST = "mqtt_host"
+CONF_MQTT_PORT = "mqtt_port"
+CONF_MQTT_ID = "mqtt_id"
+
+# A refused MQTT login triggers a new API session at most this often.
+_MQTT_RELOGIN_INTERVAL = 600.0
+# Devices push to the cloud only when their state changes or the LAN side polls them, so a
+# device that is unreachable on the LAN stays silent on MQTT. This long after the channel
+# (re)connects, the ones that have not reported are asked about through the HTTP API once.
+_SILENT_CHECK_DELAY = 90.0
+_SILENT_CHECK_MAX = 30
 
 REGIONS: dict[str, tuple[str, int]] = {
     "EU": ("https://a1.tuyaeu.com/api.json", 49),
@@ -102,6 +127,8 @@ class OemAppProfile:
     device_id: str = "5fe5abb36728cce7b9cd2185625edccbd6d9bd787e40"
     regions: tuple[str, ...] = ("EU", "US", "CN", "IN")
     default_region: str = "EU"
+    # Android package of the app: the first part of the MQTT client id.
+    package: str = "com.tuya.smart"
 
 
 class OemApiError(ProviderError):
@@ -145,6 +172,14 @@ class TuyaMobileApi:
     password: str
     sid: str | None = None
     refresh_token: str = ""
+    # Push channel credentials from the login result (see `oem_mqtt.py`). `ecode` belongs
+    # to the user and outlives sessions; the silent refresh may not return it.
+    ecode: str = ""
+    uid: str = ""
+    mqtt_host: str = ""
+    mqtt_port: int = 8883
+    # Called after every successful login (new sid): persist it, re-key the push channel.
+    on_session: Callable[[], None] | None = None
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def _sign(self, params: dict[str, str], post_data: str | None) -> str:
@@ -247,10 +282,10 @@ class TuyaMobileApi:
 
     # ------------------------------------------------------------------ auth
 
-    async def login(self) -> None:
-        """Obtain a session: silent refresh first, then e-mail/password."""
+    async def login(self, *, full: bool = False) -> None:
+        """Obtain a session: silent refresh first, then e-mail/password (`full` skips the refresh)."""
         async with self._lock:
-            if self.refresh_token:
+            if self.refresh_token and not full:
                 try:
                     result = await self._request(
                         "tuya.m.user.session.update",
@@ -261,6 +296,7 @@ class TuyaMobileApi:
                     if isinstance(result, dict) and result.get("sid"):
                         self.sid = result["sid"]
                         self.refresh_token = result.get("refreshToken", self.refresh_token)
+                        self._take_session_info(result)
                         return
                 except ProviderAuthError:
                     raise
@@ -294,6 +330,23 @@ class TuyaMobileApi:
                 raise ProviderAuthError("login returned no session")
             self.sid = login_info["sid"]
             self.refresh_token = login_info.get("refreshToken", "")
+            self._take_session_info(login_info)
+
+    def _take_session_info(self, info: dict[str, Any]) -> None:
+        """Keep the push credentials a login result carries, then tell the owner."""
+        if info.get("ecode"):
+            self.ecode = str(info["ecode"])
+        if info.get("uid"):
+            self.uid = str(info["uid"])
+        domain = info.get("domain")
+        if isinstance(domain, dict) and domain.get("mobileMqttsUrl"):
+            self.mqtt_host = str(domain["mobileMqttsUrl"])
+            try:
+                self.mqtt_port = int(domain.get("mqttsPort") or 8883)
+            except (TypeError, ValueError):
+                self.mqtt_port = 8883
+        if self.on_session is not None:
+            self.on_session()
 
     # ------------------------------------------------------------------ data
 
@@ -431,6 +484,9 @@ class TuyaOemProvider(BaseProvider):
     name = "Other Tuya OEM app (app id + secret)"
     login_kind = LoginKind.CREDENTIALS
     supports_homes = True
+    # The app's MQTT session (`oem_mqtt.py`) carries DP reports, online/offline events and
+    # commands: devices unreachable on the LAN stay usable through it.
+    supports_push = True
     profile: OemAppProfile | None = None  # fixed profile in subclasses
     login_fields = {
         CONF_EMAIL: "text",
@@ -458,6 +514,26 @@ class TuyaOemProvider(BaseProvider):
         self._schema_by_product: dict[str, dict[int, DpSpec]] = {}
         self._version_by_product: dict[str, str | None] = {}
         self._meta_by_product: dict[str, dict[str, str]] = {}
+        # Persist the session after a re-login (the hub sets this).
+        self.on_token_update: Callable[[dict[str, Any]], None] | None = None
+        # Push channel: credentials survive restarts, the rest is runtime state.
+        self._ecode = ""
+        self._uid = ""
+        self._mqtt_host = ""
+        self._mqtt_port = 8883
+        self._mqtt_id = ""  # per-installation part of the client id
+        self._known: dict[str, CloudDevice] = {}
+        self._push_listener: PushListener | None = None
+        self._channel: OemMqttChannel | None = None
+        self._frame_version: dict[str, str] = {}  # devId → "2.2" / "2.3", learned from its reports
+        self._cloud_online: dict[str, bool] = {}
+        self._seq = 1
+        self._origin = int.from_bytes(os.urandom(4), "big") & 0x7FFFFFFF
+        self._last_mqtt_relogin = 0.0
+        self._relogin_task: asyncio.Task[None] | None = None
+        self._push_lock = asyncio.Lock()
+        self._silent_check: asyncio.TimerHandle | None = None
+        self._silent_task: asyncio.Task[None] | None = None
 
     def _resolve_profile(self) -> OemAppProfile:
         if self.profile is not None:
@@ -478,8 +554,25 @@ class TuyaOemProvider(BaseProvider):
                 password=self._password,
                 sid=self._sid,
                 refresh_token=self._refresh_token,
+                ecode=self._ecode,
+                uid=self._uid,
+                mqtt_host=self._mqtt_host,
+                mqtt_port=self._mqtt_port,
+                on_session=self._session_changed,
             )
         return self._api
+
+    def _session_changed(self) -> None:
+        """New API session: re-key the push channel and persist."""
+        api = self._api
+        if api is None:
+            return
+        self._ecode, self._uid = api.ecode, api.uid
+        self._mqtt_host, self._mqtt_port = api.mqtt_host, api.mqtt_port
+        if self._channel is not None and api.sid and api.ecode:
+            self._channel.set_credentials(api.sid, mqtt_password(api.ecode))
+        if self.on_token_update is not None:
+            self.on_token_update({})
 
     async def async_start_login(self, user_input: dict[str, Any]) -> LoginStep:
         """Store credentials; the actual login happens in finish."""
@@ -514,6 +607,11 @@ class TuyaOemProvider(BaseProvider):
             CONF_COUNTRY_CODE: self._country_code,
             CONF_SID: self._api.sid if self._api else self._sid,
             CONF_REFRESH_TOKEN: self._api.refresh_token if self._api else self._refresh_token,
+            CONF_ECODE: self._api.ecode if self._api else self._ecode,
+            CONF_UID: self._api.uid if self._api else self._uid,
+            CONF_MQTT_HOST: self._api.mqtt_host if self._api else self._mqtt_host,
+            CONF_MQTT_PORT: self._api.mqtt_port if self._api else self._mqtt_port,
+            CONF_MQTT_ID: self._mqtt_id,
         }
         if self.profile is None and self._custom_profile:
             data[CONF_CLIENT_ID] = self._custom_profile.client_id
@@ -530,6 +628,11 @@ class TuyaOemProvider(BaseProvider):
         provider._country_code = data.get(CONF_COUNTRY_CODE)
         provider._sid = data.get(CONF_SID)
         provider._refresh_token = data.get(CONF_REFRESH_TOKEN, "")
+        provider._ecode = str(data.get(CONF_ECODE) or "")
+        provider._uid = str(data.get(CONF_UID) or "")
+        provider._mqtt_host = str(data.get(CONF_MQTT_HOST) or "")
+        provider._mqtt_port = int(data.get(CONF_MQTT_PORT) or 8883)
+        provider._mqtt_id = str(data.get(CONF_MQTT_ID) or "")
         if cls.profile is None:
             provider._custom_profile = OemAppProfile(
                 key="custom",
@@ -566,6 +669,7 @@ class TuyaOemProvider(BaseProvider):
                     _LOGGER.warning("Skipping device %s: %s", raw.get("devId"), err)
         self._cache = devices
         self._last_fetch = now
+        self.update_known_devices(devices)
         return list(devices)
 
     async def _async_attach_schema(self, api: TuyaMobileApi, device: CloudDevice, raw: dict[str, Any]) -> None:
@@ -626,18 +730,211 @@ class TuyaOemProvider(BaseProvider):
             if g.get("groupId") is not None
         ]
 
+    def update_known_devices(self, devices: list[CloudDevice]) -> None:
+        """Devices to follow on the push channel and to address cloud commands to."""
+        self._known = {d.id: d for d in devices}
+        if self._channel is not None:
+            self._channel.set_devices(self._topic_ids())
+
     async def async_send_cloud_command(self, device_id: str, commands: list[dict[str, Any]]) -> bool:
-        """Cloud fallback: needs dp ids, so map codes through the cache."""
-        device = next((d for d in self._cache if d.id == device_id), None)
+        """Cloud fallback: MQTT when the device's frame format is known, else the HTTP API."""
+        device = self._known.get(device_id)
         if device is None:
             return False
         by_code = device.codes
         dps = {str(by_code[c["code"]].dp_id): c["value"] for c in commands if c.get("code") in by_code}
         if not dps:
             return False
+        if await self._async_publish_mqtt(device, dps):
+            return True
         try:
             await self._get_api().publish_dps(device_id, device.gateway_id, dps)
         except ProviderError as err:
             _LOGGER.debug("%s: cloud command failed: %s", device_id, err)
             return False
         return True
+
+    async def _async_publish_mqtt(self, device: CloudDevice, dps: dict[str, Any]) -> bool:
+        """Command over the MQTT session: ~100 ms to the device and no HTTP rate limit."""
+        channel = self._channel
+        version = self._frame_version.get(device.id)
+        # Sub-devices need a node address in the frame that is not known yet: HTTP handles them.
+        if channel is None or not channel.connected or version is None or device.gateway_id or not device.local_key:
+            return False
+        self._seq += 1
+        frame = encode_command(version, device.local_key, dps, self._seq, self._origin)
+        if await channel.async_publish(device.id, frame):
+            return True
+        _LOGGER.debug("%s: MQTT command not acknowledged; using the HTTP API", device.id)
+        return False
+
+    # ------------------------------------------------------------------ push (MQTT)
+
+    def _topic_ids(self) -> set[str]:
+        ids = set(self._known)
+        ids.update(d.gateway_id for d in self._known.values() if d.gateway_id)
+        return ids
+
+    async def async_start_push(self, listener: PushListener) -> bool:
+        """Open (or re-scope) the app's MQTT session. Idempotent."""
+        async with self._push_lock:
+            return await self._async_start_push(listener)
+
+    async def _async_start_push(self, listener: PushListener) -> bool:
+        self._push_listener = listener
+        if self._channel is not None:
+            self._channel.set_devices(self._topic_ids())
+            return True
+        api = self._get_api()
+        try:
+            if not api.sid:
+                await api.login()
+            if not api.ecode:
+                # Entries created before the push channel lack the ecode; only a full login returns it.
+                await api.login(full=True)
+        except ProviderError as err:
+            _LOGGER.debug("push channel unavailable: %s", err)
+            return False
+        if not api.ecode or not api.sid:
+            _LOGGER.debug("push channel unavailable: the login result has no ecode")
+            return False
+        if not self._mqtt_id:
+            self._mqtt_id = os.urandom(12).hex()
+            if self.on_token_update is not None:
+                self.on_token_update({})
+        profile = self._resolve_profile()
+        self._channel = OemMqttChannel(
+            self.hass,
+            client_id=mqtt_client_id(profile.package, self._mqtt_id, api.uid),
+            on_message=self._on_mqtt_message,
+            on_connection=self._on_mqtt_connection,
+        )
+        self._channel.set_credentials(api.sid, mqtt_password(api.ecode))
+        self._channel.set_devices(self._topic_ids())
+        # A cached "online" may be days old: only what the channel reports counts from now on.
+        # LAN-polled devices report within one poll; the silent ones are checked over HTTP.
+        for dev_id in list(self._known):
+            self._set_cloud_online(dev_id, False)
+        await self._channel.async_start(api.mqtt_host or mqtt_host_for(api.endpoint), api.mqtt_port)
+        return True
+
+    async def async_stop_push(self) -> None:
+        """Close the MQTT session."""
+        self._push_listener = None
+        if self._silent_check is not None:
+            self._silent_check.cancel()
+            self._silent_check = None
+        for task in (self._relogin_task, self._silent_task):
+            if task is not None and not task.done():
+                task.cancel()
+        channel, self._channel = self._channel, None
+        if channel is not None:
+            await channel.async_stop()
+        self._cloud_online.clear()
+
+    async def async_close(self) -> None:
+        """Release resources."""
+        await self.async_stop_push()
+
+    def _on_mqtt_connection(self, connected: bool, rc: int) -> None:
+        if connected:
+            _LOGGER.debug("%s: MQTT push channel connected", self.name)
+            if self._silent_check is not None:
+                self._silent_check.cancel()
+            self._silent_check = self.hass.loop.call_later(_SILENT_CHECK_DELAY, self._start_silent_check)
+            return
+        if rc in AUTH_REFUSED:
+            # The session id the broker saw is no longer valid (re-login elsewhere, expiry).
+            now = time.monotonic()
+            if now - self._last_mqtt_relogin >= _MQTT_RELOGIN_INTERVAL and (
+                self._relogin_task is None or self._relogin_task.done()
+            ):
+                self._last_mqtt_relogin = now
+                self._relogin_task = self.hass.async_create_task(self._async_mqtt_relogin())
+            return
+        _LOGGER.debug("%s: MQTT push channel lost (rc=%s)", self.name, rc)
+        # Without the channel the cloud view of every device is unknown: let the LAN decide alone.
+        for dev_id in [d for d, online in self._cloud_online.items() if online]:
+            self._set_cloud_online(dev_id, False)
+
+    def _start_silent_check(self) -> None:
+        self._silent_check = None
+        if self._silent_task is None or self._silent_task.done():
+            self._silent_task = self.hass.async_create_task(self._async_check_silent_devices())
+
+    async def _async_check_silent_devices(self) -> None:
+        """Ask the HTTP API whether the devices that never reported on MQTT are online.
+
+        Those are the ones the LAN side cannot reach (a reachable device reports its polled
+        state to the cloud too). Without this, such a device would stay unavailable until its
+        state changes, since the cached "online" is not trusted after a (re)connect.
+        """
+        channel = self._channel
+        if channel is None or not channel.connected:
+            return
+        silent = [dev_id for dev_id in self._known if self._cloud_online.get(dev_id) is not True]
+        api = self._get_api()
+        for dev_id in silent[:_SILENT_CHECK_MAX]:
+            try:
+                detail = await api.device_get(dev_id)
+            except ProviderError as err:
+                _LOGGER.debug("%s: online check failed (%s); stopping", dev_id, err)
+                return
+            online = detail.get("isOnline")
+            if isinstance(online, bool) and self._cloud_online.get(dev_id) is not True:
+                self._set_cloud_online(dev_id, online)
+            await asyncio.sleep(0.3)  # be gentle with the OEM endpoint
+
+    async def _async_mqtt_relogin(self) -> None:
+        _LOGGER.debug("%s: MQTT login refused; renewing the API session", self.name)
+        try:
+            await self._get_api().login()  # `on_session` hands the new sid to the channel
+        except ProviderError as err:
+            _LOGGER.debug("%s: session renewal for MQTT failed: %s", self.name, err)
+
+    def _on_mqtt_message(self, topic_id: str, payload: bytes) -> None:
+        source = self._known.get(topic_id)
+        if source is None or not source.local_key:
+            return
+        decoded = decode_frame(payload, source.local_key)
+        if decoded is None:
+            _LOGGER.debug("%s: unreadable MQTT frame %s…", topic_id, payload[:3])
+            return
+        version, message = decoded
+        if version in ("2.2", "2.3"):
+            self._frame_version[topic_id] = version
+        data = message.get("data")
+        if not isinstance(data, dict):
+            return
+        target = self._message_target(source, data)
+        if target is None:
+            return
+        protocol = message.get("protocol")
+        if protocol == 4 and isinstance(data.get("dps"), dict):
+            self._set_cloud_online(target.id, True)  # no explicit "online" event exists: a report is one
+            code_by_dp = {str(dp): spec.code for dp, spec in target.dp_schema.items()}
+            values = {code_by_dp[str(dp)]: value for dp, value in data["dps"].items() if str(dp) in code_by_dp}
+            if values and self._push_listener is not None:
+                self._push_listener.push_device_report(target.id, values)
+        elif protocol == 1 and isinstance(data.get("online"), bool):
+            self._set_cloud_online(target.id, data["online"])
+
+    def _message_target(self, source: CloudDevice, data: dict[str, Any]) -> CloudDevice | None:
+        """Device a message is about: the topic's device, or a child named by ``cid`` / ``devId``."""
+        cid = data.get("cid")
+        if cid:
+            return next(
+                (d for d in self._known.values() if d.gateway_id == source.id and d.node_id == str(cid)),
+                None,
+            )
+        dev_id = data.get("devId")
+        if dev_id and dev_id != source.id:
+            return self._known.get(str(dev_id))
+        return source
+
+    def _set_cloud_online(self, device_id: str, online: bool) -> None:
+        if self._cloud_online.get(device_id) == online:
+            return
+        self._cloud_online[device_id] = online
+        if self._push_listener is not None:
+            self._push_listener.push_device_online(device_id, online)

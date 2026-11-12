@@ -140,6 +140,36 @@ async def test_cloud_backup_availability(hass: HomeAssistant) -> None:
     assert device.dps["1"] is False
 
 
+async def test_cloud_backup_follows_the_push_channel(hass: HomeAssistant) -> None:
+    """The backup is on only while the provider's push channel is up, never on a stale cached 'online'."""
+    from custom_components.tuya_eco.const import CONF_DEVICES_CACHE
+    from custom_components.tuya_eco.providers.base import CloudDevice, DpSpec, DpType
+    from custom_components.tuya_eco.providers.manual import ManualProvider
+
+    entry = _entry()
+    cached = CloudDevice(
+        id=DEV_A,
+        name="Plug A",
+        local_key="0123456789abcdef",
+        online=True,
+        dp_schema={1: DpSpec(1, "switch_1", DpType.BOOLEAN)},
+    )
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_DEVICES_CACHE: [cached.as_dict()]})
+    with (
+        patch.object(ManualProvider, "supports_push", True),
+        patch.object(ManualProvider, "async_start_push", AsyncMock(return_value=False)),
+    ):
+        await _setup(hass, entry)
+        hub = entry.runtime_data
+        device = hub.devices[DEV_A]
+        assert device.cloud_backup is False and not device.available  # channel failed: LAN only
+
+        hub.provider.async_start_push = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        await hub._async_resubscribe_push()
+        assert device.cloud_backup is True and device.transport == "cloud"
+
+
 async def test_smartlife_listener_reports_online_events() -> None:
     hass = SimpleNamespace(loop=asyncio.get_running_loop())
     provider = SmartLifeProvider(hass)  # type: ignore[arg-type]

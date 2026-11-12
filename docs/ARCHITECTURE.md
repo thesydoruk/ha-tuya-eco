@@ -66,7 +66,9 @@ Implemented providers:
 * **smartlife** – Smart Life / Tuya Smart. QR login through `tuya-device-sharing-sdk`
   (same mechanism as the core HA integration). The sharing API returns `local_key` and
   `local_strategy` (DP id → code map) for every device.
-* **ledvance** – Ledvance SMART+ WiFi. See `docs/LEDVANCE.md` for the key-retrieval path.
+* **ledvance** – Ledvance SMART+ WiFi. See `docs/LEDVANCE.md` for the key-retrieval path and
+  for the app's MQTT session (`providers/oem_mqtt.py`), which all mobile-API providers use as
+  their push channel and command backup.
 * **tuya_iot** – Tuya IoT Platform (Cloud project `client_id`/`secret`) through
   the integration's own OpenAPI client (`providers/tuya_openapi.py`).
 * **sylvania**, **tuya_oem** – the same mobile-app API as Ledvance with another app profile,
@@ -160,6 +162,10 @@ shows the LAN host on the device page (skipped for sub-devices, whose host is th
 
 * The cloud is never on the hot path. If the cloud is down, everything keeps working from
   the cached entry data.
+* Cloud backup: providers with a push channel (`supports_push`: Smart Life, the mobile-API
+  providers) keep a device usable while its LAN link is down — availability follows the
+  cloud's online/offline events, state follows cloud reports, commands go through the cloud.
+  As soon as the LAN link is up, cloud reports are ignored and commands go over the LAN.
 * The LAN side is pure asyncio. Only the synchronous sharing SDK runs in executor threads.
 * A provider must not import HA platform code; a platform must not import a provider.
 * Everything that identifies a device is keyed by Tuya `device id`, never by IP.
