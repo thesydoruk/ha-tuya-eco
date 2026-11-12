@@ -529,7 +529,9 @@ class TuyaOemProvider(BaseProvider):
         self._cloud_online: dict[str, bool] = {}
         self._seq = 1
         self._origin = int.from_bytes(os.urandom(4), "big") & 0x7FFFFFFF
-        self._last_mqtt_relogin = 0.0
+        # None = never; a 0.0 default would block the first renewal while time.monotonic() (seconds
+        # since boot) is still below the interval, i.e. during the first 10 minutes after a host boot.
+        self._last_mqtt_relogin: float | None = None
         self._relogin_task: asyncio.Task[None] | None = None
         self._push_lock = asyncio.Lock()
         self._silent_check: asyncio.TimerHandle | None = None
@@ -846,7 +848,8 @@ class TuyaOemProvider(BaseProvider):
         if rc in AUTH_REFUSED:
             # The session id the broker saw is no longer valid (re-login elsewhere, expiry).
             now = time.monotonic()
-            if now - self._last_mqtt_relogin >= _MQTT_RELOGIN_INTERVAL and (
+            last = self._last_mqtt_relogin
+            if (last is None or now - last >= _MQTT_RELOGIN_INTERVAL) and (
                 self._relogin_task is None or self._relogin_task.done()
             ):
                 self._last_mqtt_relogin = now

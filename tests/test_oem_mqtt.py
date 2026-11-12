@@ -331,7 +331,14 @@ async def test_stop_cancels_a_pending_silent_check() -> None:
     assert provider._silent_check is None
 
 
-async def test_refused_login_renews_the_session_once() -> None:
+async def test_refused_login_renews_the_session_once(monkeypatch) -> None:
+    # A host that booted 30 s ago: time.monotonic() is still below the rate-limit interval.
+    import time as real_time  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        "custom_components.tuya_eco.providers.tuya_oem.time",
+        SimpleNamespace(monotonic=lambda: 30.0, time=real_time.time),
+    )
     provider, _rec = _provider()
     api = provider._get_api()
     api.login = AsyncMock()  # type: ignore[method-assign]
