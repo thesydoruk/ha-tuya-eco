@@ -771,6 +771,7 @@ def _build_by_code(ctx: _Ctx) -> None:
                         "scale": scale,
                         "type": "Integer",
                         "enabled_default": sensor_rule.enabled_default if sensor_rule else True,
+                        **({"accumulate": True} if sensor_rule and sensor_rule.accumulate else {}),
                     },
                 )
             )

@@ -47,6 +47,9 @@ class SensorRule:
     default_scale: int | None = None
     enabled_default: bool = True
     name: str | None = None
+    # The DP reports the energy used since its previous report (plugs push `add_ele` every
+    # few minutes), not a meter reading: the sensor sums the reports into a running total.
+    accumulate: bool = False
 
 
 @dataclass(slots=True)
@@ -125,6 +128,10 @@ def _energy(scale: int | None = None) -> SensorRule:
     return SensorRule(SensorDeviceClass.ENERGY, _TI, UnitOfEnergy.KILO_WATT_HOUR, default_scale=scale)
 
 
+def _energy_increment(scale: int | None = None) -> SensorRule:
+    return SensorRule(SensorDeviceClass.ENERGY, _TI, UnitOfEnergy.KILO_WATT_HOUR, default_scale=scale, accumulate=True)
+
+
 def _power(scale: int | None = 1) -> SensorRule:
     return SensorRule(SensorDeviceClass.POWER, _M, UnitOfPower.WATT, default_scale=scale)
 
@@ -182,8 +189,8 @@ SENSORS: dict[str, SensorRule] = {
     "pv_power_channel_2": _power(0),
     "battery_power": _power(0),
     "inverter_output_power": _power(0),
-    "add_ele": _energy(3),
-    "pro_add_ele": _energy(3),
+    "add_ele": _energy_increment(3),
+    "pro_add_ele": _energy_increment(3),
     "total_forward_energy": _energy(2),
     "forward_energy_total": _energy(2),
     "reverse_energy_total": _energy(2),
