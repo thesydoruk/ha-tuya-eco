@@ -104,6 +104,24 @@
           "description": "The Tuya Eco device."
         }
       }
+    },
+    "set_power_on_state": {
+      "name": "Set power-on state",
+      "description": "Store the state a light takes when mains power returns and switch its power-on behavior to Custom. Without any field the light's current state is stored.",
+      "fields": {
+        "rgb_color": {
+          "name": "Color",
+          "description": "Color to come on with. Cannot be combined with a color temperature."
+        },
+        "brightness_pct": {
+          "name": "Brightness",
+          "description": "Brightness to come on with. On its own it applies to white light, or to the current color of a light without a white channel."
+        },
+        "color_temp_kelvin": {
+          "name": "Color temperature",
+          "description": "White color temperature to come on with."
+        }
+      }
     }
   },
   "entity": {
@@ -231,6 +249,9 @@
       },
       "manual_clean": {
         "name": "Manual clean"
+      },
+      "power_memory_save": {
+        "name": "Save current state as power-on state"
       },
       "reset": {
         "name": "Reset"
@@ -1239,6 +1260,9 @@
       },
       "ipc_work_mode": {
         "name": "Ipc work mode"
+      },
+      "light_do_not_disturb": {
+        "name": "Stay off after a power cut"
       },
       "lock": {
         "name": "Child lock"

@@ -2,24 +2,65 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import color as color_util
+import voluptuous as vol
 
+from . import power_on
 from .entity import EcoEntity
 from .hub import EcoHub
-from .light import decode_colour
 from .local.device import EcoDevice
 from .mapping import EntityDef, PowerMemory
 from .mapping.codes import POWER_MEMORY_MODES
 from .platform_setup import async_setup_platform_entities
 
+SERVICE_SET_POWER_ON_STATE = "set_power_on_state"
+ATTR_RGB_COLOR = "rgb_color"
+ATTR_BRIGHTNESS_PCT = "brightness_pct"
+ATTR_COLOR_TEMP_KELVIN = "color_temp_kelvin"
+
+SET_POWER_ON_STATE_SCHEMA: dict[Any, Any] = {
+    vol.Optional(ATTR_RGB_COLOR): vol.All(vol.Coerce(tuple), vol.ExactSequence((cv.byte, cv.byte, cv.byte))),
+    vol.Optional(ATTR_BRIGHTNESS_PCT): vol.All(vol.Coerce(float), vol.Range(min=1, max=100)),
+    vol.Optional(ATTR_COLOR_TEMP_KELVIN): vol.All(vol.Coerce(int), vol.Range(min=1000, max=10000)),
+}
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up selects."""
     async_setup_platform_entities(hass, entry, async_add_entities, Platform.SELECT, EcoSelect)
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        SERVICE_SET_POWER_ON_STATE, SET_POWER_ON_STATE_SCHEMA, "async_set_power_on_state"
+    )
+
+
+def scene_number(data: Any) -> int | None:
+    """Scene number of scene data: the first byte of the LAN hex string.
+
+    The cloud reports ``scene_data_v2`` as JSON whose ``scene_num`` counts from 1.
+    """
+    if isinstance(data, str) and data.lstrip().startswith("{"):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            return None
+    try:
+        if isinstance(data, dict):
+            return int(data["scene_num"]) - 1
+        if isinstance(data, str):
+            return int(data[:2], 16)
+    except (KeyError, TypeError, ValueError):
+        return None
+    return None
 
 
 class EcoSelect(EcoEntity, SelectEntity):
@@ -39,11 +80,12 @@ class EcoSelect(EcoEntity, SelectEntity):
         """Current."""
         value = self.dp_value("value")
         if self._scenes:
-            if self.dp_value("mode") != "scene" or not isinstance(value, str):
+            number = scene_number(value) if self.dp_value("mode") == "scene" else None
+            if number is None:
                 return None
-            return next((name for name, data in self._scenes.items() if data[:2] == value[:2].lower()), None)
+            return next((name for name, data in self._scenes.items() if scene_number(data) == number), None)
         if self._power_memory:
-            memory = PowerMemory.decode(value)
+            memory = power_on.stored(self)
             return POWER_MEMORY_MODES.get(memory.mode) if memory else None
         if value is None:
             return None
@@ -54,6 +96,11 @@ class EcoSelect(EcoEntity, SelectEntity):
             self._attr_options = [*self._attr_options, text]
         return text
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """The stored custom power-on state."""
+        return power_on.attributes(self) if self._power_memory else None
+
     async def async_select_option(self, option: str) -> None:
         """Write."""
         if self._scenes:
@@ -62,31 +109,29 @@ class EcoSelect(EcoEntity, SelectEntity):
             await self.async_write_dps({mode_dp: "scene", scene_dp: self._scenes[option]})
             return
         if self._power_memory:
-            await self.async_write("value", self._power_memory_payload(option).encode())
+            if option == "custom":
+                memory = power_on.snapshot(self)
+            else:
+                # Only the mode byte changes: the stored custom state is kept.
+                memory = power_on.stored(self) or PowerMemory()
+                memory.mode = next(mode for mode, name in POWER_MEMORY_MODES.items() if name == option)
+            await self.async_write("value", memory.encode())
             return
         await self.async_write("value", option)
 
-    def _power_memory_payload(self, option: str) -> PowerMemory:
-        """The current payload with the mode changed; ``custom`` snapshots the light's state."""
-        memory = PowerMemory.decode(self.dp_value("value")) or PowerMemory()
-        memory.mode = next(mode for mode, name in POWER_MEMORY_MODES.items() if name == option)
-        if option != "custom":
-            return memory
-        brightness = self.dp_value("brightness")
-        if isinstance(brightness, (int, float)):
-            memory.brightness = int(brightness)
-        temp = self.dp_value("color_temp")
-        if isinstance(temp, (int, float)):
-            memory.color_temp = int(temp)
-        colour_meta = self.definition.meta.get("color") or {}
-        hsv = colour_meta.get("hsv") or {}
-        decoded = decode_colour(
-            self.dp_value("color"),
-            bool(colour_meta.get("v2", True)),
-            int((hsv.get("s") or {}).get("max") or 0),
-            int((hsv.get("v") or {}).get("max") or 0),
+    async def async_set_power_on_state(
+        self,
+        rgb_color: tuple[int, int, int] | None = None,
+        brightness_pct: float | None = None,
+        color_temp_kelvin: int | None = None,
+    ) -> None:
+        """Store an explicit custom power-on state and switch the light to it."""
+        if not self._power_memory:
+            raise ServiceValidationError(f"{self.entity_id} is not a power-on behavior select")
+        memory = power_on.explicit(
+            self,
+            hs_color=color_util.color_RGB_to_hs(*rgb_color) if rgb_color is not None else None,
+            brightness_pct=brightness_pct,
+            color_temp_kelvin=color_temp_kelvin,
         )
-        if decoded:
-            h, sat, val = decoded
-            memory.hue, memory.saturation, memory.value = int(round(h)), int(round(sat * 1000)), int(round(val * 1000))
-        return memory
+        await self.async_write("value", memory.encode())

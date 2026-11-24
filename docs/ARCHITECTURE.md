@@ -134,9 +134,15 @@ when the cloud is unreachable.
 Units in the cloud spec are normalised by `codes.clean_unit` (`lux` → `lx`, `℃` → `°C`;
 placeholders such as `x` are dropped). Bitmap DPs that become binary sensors (`fault`)
 keep their bit labels so the entity can list the active faults as an attribute. Lights
-with a raw `power_memory` DP get a *Power-on behavior* select (`mapping/types.py`
-`PowerMemory` is the 12-byte codec: mode byte + custom HSV / brightness / colour
-temperature).
+with a raw `power_memory` DP get a *Power-on behavior* select, a button that stores the
+light's current state as the custom one, and the `set_power_on_state` entity service for
+an explicit state (`mapping/types.py` `PowerMemory` is the 12-byte codec: mode byte +
+custom HSV / brightness / colour temperature; `power_on.py` builds the payloads and
+zeroes the half — colour or white — a custom state does not use, because the payload has
+no field saying which half applies). On such lights `do_not_disturb` is named after what
+it does: stay off after a power cut. `scene_data` and `scene_data_v2` (same hex on the
+LAN, JSON only in the cloud) become a *Scene* select; a light without a white channel
+gets the colour scenes only.
 
 The builder always appends a diagnostic **connection** sensor per device. Besides the
 transport in use its attributes carry the LAN host and MAC (from the cloud when it knows

@@ -586,10 +586,11 @@ SIREN_CODES: frozenset[str] = frozenset({"alarm_switch", "siren_switch"})
 # Categories whose plain `switch` / `switch_n` DPs are water valves.
 VALVE_CATEGORIES: frozenset[str] = frozenset({"ggq", "sfkzq"})
 
-# Factory scenes of v1 bulbs (hex `scene_data`; first byte = scene number). The values
-# are the Tuya defaults, as collected by tuya-local; a bulb may report other speeds or
-# colours for the same scene number, so the select matches on the number only.
-LIGHT_SCENES_V1: dict[str, str] = {
+# Factory scenes of lights (hex `scene_data` / `scene_data_v2`: scene number, then 13-byte
+# units of switch time, gradient time, change mode, H, S, V, brightness, temperature). The
+# values are the Tuya defaults, as collected by tuya-local; a light may report other speeds
+# or colours for the same scene number, so the select matches on the number only.
+LIGHT_SCENES: dict[str, str] = {
     "night": "000c0d0000000000000000c80000",
     "reading": "010e0d0000840000000003e801f4",
     "working": "020e0d0000e80383000003e803e8",
@@ -601,6 +602,8 @@ LIGHT_SCENES_V1: dict[str, str] = {
     "gorgeous": "07464602000003e803e800000000464602007803e803e80000000046460200f003e803e800000000"
     "464602003d03e803e80000000046460200ae03e803e800000000464602011303e803e800000000",
 }
+# The scenes that only drive the white channel: useless on a colour-only light.
+LIGHT_SCENES_WHITE: frozenset[str] = frozenset({"night", "reading", "working", "leisure"})
 
 # Codes that are internal/noisy and should not become entities on their own.
 IGNORED_CODES: frozenset[str] = frozenset(

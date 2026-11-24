@@ -26,3 +26,28 @@ reconnect:
       selector:
         device:
           integration: tuya_eco
+
+set_power_on_state:
+  target:
+    entity:
+      integration: tuya_eco
+      domain: select
+  fields:
+    rgb_color:
+      required: false
+      selector:
+        color_rgb:
+    brightness_pct:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    color_temp_kelvin:
+      required: false
+      selector:
+        color_temp:
+          unit: kelvin
+          min: 2700
+          max: 6500

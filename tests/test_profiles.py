@@ -1,4 +1,4 @@
-"""Tests of product profiles (replace / extend) and the v1 light scene select."""
+"""Tests of product profiles (replace / extend) and the light scene select."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 
 from custom_components.tuya_eco.button import EcoButton
 from custom_components.tuya_eco.mapping import build_entities, profiles as P
-from custom_components.tuya_eco.mapping.codes import LIGHT_SCENES_V1
+from custom_components.tuya_eco.mapping.codes import LIGHT_SCENES
 from custom_components.tuya_eco.providers.base import CloudDevice, DpSpec, DpType
 from custom_components.tuya_eco.select import EcoSelect
 from custom_components.tuya_eco.switch import EcoSwitch
@@ -48,27 +48,46 @@ def test_v1_bulb_gets_scene_select_and_remote_switch() -> None:
     scene = defs[(Platform.SELECT, "scene")]
     assert scene.dps == {"value": 25, "mode": 21}
     assert scene.translation_key == "scene"
-    assert list(scene.meta["scenes"]) == list(LIGHT_SCENES_V1)
+    assert list(scene.meta["scenes"]) == list(LIGHT_SCENES)
     remote = defs[(Platform.SWITCH, "remote_switch")]
     assert remote.dps == {"switch": 101}
     assert remote.entity_category == "config"
     assert remote.translation_key == "remote_switch"
 
 
-def test_v2_strip_has_no_scene_select() -> None:
-    device = _dev(
+def _rgb_strip() -> CloudDevice:
+    return _dev(
         "dj",
         [
             (20, "switch_led", DpType.BOOLEAN, {}, False),
             (21, "work_mode", DpType.ENUM, {"range": ["white", "colour", "scene", "music"]}, False),
+            (24, "colour_data_v2", DpType.JSON, {}, False),
             (25, "scene_data_v2", DpType.JSON, {}, False),
         ],
     )
+
+
+def test_colour_only_v2_strip_gets_the_colour_scenes() -> None:
+    scene = _keys(build_entities(_rgb_strip()))[(Platform.SELECT, "scene")]
+    assert scene.dps == {"value": 25, "mode": 21}
+    assert list(scene.meta["scenes"]) == ["soft", "colorful", "dazzling", "gorgeous"]
+
+
+def test_v2_bulb_with_white_channel_gets_all_scenes() -> None:
+    device = _rgb_strip()
+    device.dp_schema[22] = DpSpec(dp_id=22, code="bright_value_v2", type=DpType.INTEGER, values={"max": 1000})
+    scene = _keys(build_entities(device))[(Platform.SELECT, "scene")]
+    assert list(scene.meta["scenes"]) == list(LIGHT_SCENES)
+
+
+def test_no_scene_select_without_a_scene_work_mode() -> None:
+    device = _rgb_strip()
+    device.dp_schema[21] = DpSpec(dp_id=21, code="work_mode", type=DpType.ENUM, values={"range": ["white", "colour"]})
     assert (Platform.SELECT, "scene") not in _keys(build_entities(device))
 
 
 def test_scene_numbers_are_unique() -> None:
-    assert len({data[:2] for data in LIGHT_SCENES_V1.values()}) == len(LIGHT_SCENES_V1)
+    assert len({data[:2] for data in LIGHT_SCENES.values()}) == len(LIGHT_SCENES)
 
 
 # ---------------------------------------------------------------------- profiles
@@ -214,7 +233,24 @@ async def test_scene_select_reads_by_scene_number_and_writes_mode() -> None:
     device.dps[25] = "ff0e0d"
     assert entity.current_option is None
     await entity.async_select_option("reading")
-    assert device.written == [{21: "scene", 25: LIGHT_SCENES_V1["reading"]}]
+    assert device.written == [{21: "scene", 25: LIGHT_SCENES["reading"]}]
+
+
+async def test_scene_select_reads_the_cloud_json_of_a_v2_strip() -> None:
+    definition = _keys(build_entities(_rgb_strip()))[(Platform.SELECT, "scene")]
+    # The cloud spells the scene as JSON and counts scenes from 1: 6 is hex scene 05.
+    entity, device = _entity(EcoSelect, definition, {21: "scene", 25: '{"scene_num":6,"scene_units":[]}'})
+    assert entity.current_option == "colorful"
+    device.dps[25] = {"scene_num": 5}
+    assert entity.current_option == "soft"
+    device.dps[25] = '{"scene_num":1,"scene_units":[]}'  # a white scene: not offered on this strip
+    assert entity.current_option is None
+    device.dps[25] = "{broken"
+    assert entity.current_option is None
+    await entity.async_select_option("gorgeous")
+    assert device.written == [{21: "scene", 25: LIGHT_SCENES["gorgeous"]}]
+    device.dps[25] = LIGHT_SCENES["gorgeous"]
+    assert entity.current_option == "gorgeous"
 
 
 async def test_string_switch_and_valued_button() -> None:

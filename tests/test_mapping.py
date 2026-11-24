@@ -69,7 +69,7 @@ def test_rgbcw_light() -> None:
     assert light.meta["color"]["v2"] is True
     assert light.meta["brightness"]["max"] == 1000
     assert Platform.SWITCH not in defs  # switch_led was claimed by the light
-    assert Platform.SELECT not in defs  # work_mode claimed, scene ignored
+    assert [d.key for d in defs[Platform.SELECT]] == ["scene"]  # work_mode itself is claimed by the light
     assert [d.key for d in defs[Platform.NUMBER]] == ["countdown_1"]
 
 

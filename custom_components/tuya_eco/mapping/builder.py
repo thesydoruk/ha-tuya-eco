@@ -168,8 +168,8 @@ def _build_lights(ctx: _Ctx) -> None:
         _add_light(ctx, key, switch, bright, temp, colour, mode, name=name, suffix=n or "_1")
         if n == "":
             light_def = ctx.defs[-1]
-            _add_scene_select(ctx, mode)
-            _add_power_memory_select(ctx, light_def)
+            _add_scene_select(ctx, mode, light_def)
+            _add_power_memory_entities(ctx, light_def)
 
     # fs/fsd: a second plain light switch next to the main one
     if cat in ("fs", "fsd"):
@@ -234,11 +234,18 @@ def _add_light(
     ctx.add(EntityDef(Platform.LIGHT, key, dps, name=name, meta=meta))
 
 
-def _add_scene_select(ctx: _Ctx, mode: DpSpec | None) -> None:
-    """Built-in scenes of v1 bulbs (hex ``scene_data``) as a select."""
-    scene = ctx.spec("scene_data", type=DpType.STRING)
+def _add_scene_select(ctx: _Ctx, mode: DpSpec | None, light: EntityDef) -> None:
+    """Built-in scenes (``scene_data`` / ``scene_data_v2`` on DP 25) as a select.
+
+    Both codes carry the same hex string on the LAN; the cloud spells ``scene_data_v2``
+    as JSON, which the select only has to read. A light without a white channel gets the
+    scenes built from colours only.
+    """
+    scene = ctx.spec("scene_data", type=DpType.STRING) or ctx.spec("scene_data_v2")
     if scene is None or mode is None or mode.type != DpType.ENUM or "scene" not in _enum(mode):
         return
+    has_white = "brightness" in light.dps or "color_temp" in light.dps
+    scenes = {name: data for name, data in C.LIGHT_SCENES.items() if has_white or name not in C.LIGHT_SCENES_WHITE}
     ctx.add(
         EntityDef(
             Platform.SELECT,
@@ -248,16 +255,17 @@ def _add_scene_select(ctx: _Ctx, mode: DpSpec | None) -> None:
             entity_category=EntityCategory.CONFIG,
             icon="mdi:palette",
             translation_key="scene",
-            meta={"scenes": dict(C.LIGHT_SCENES_V1)},
+            meta={"scenes": scenes},
         )
     )
 
 
-def _add_power_memory_select(ctx: _Ctx, light: EntityDef) -> None:
+def _add_power_memory_entities(ctx: _Ctx, light: EntityDef) -> None:
     """Power-on behaviour of a light (raw ``power_memory``: default / last state / custom).
 
-    The custom state is taken from the light's current DPs when the option is chosen, so
-    the select carries the light's DP roles too.
+    A select picks the mode and a button stores the light's current state as the custom
+    one, so both carry the light's DP roles and value ranges. On such a light
+    ``do_not_disturb`` is about power cuts too, and is named after what it does.
     """
     memory = ctx.spec("power_memory", type=DpType.RAW)
     if memory is None:
@@ -266,23 +274,48 @@ def _add_power_memory_select(ctx: _Ctx, light: EntityDef) -> None:
     for role in ("brightness", "color_temp", "color", "mode"):
         if role in light.dps:
             dps[role] = light.dps[role]
+    meta: dict[str, Any] = {"power_memory": True, "color": dict(light.meta.get("color") or {})}
+    for role in ("brightness", "color_temp"):
+        if role in light.meta:
+            meta[role] = dict(light.meta[role])
     ctx.claim(memory)
     ctx.defs.append(
         EntityDef(
             Platform.SELECT,
             "power_memory",
-            dps,
+            dict(dps),
             name="Power-on behavior",
             entity_category=EntityCategory.CONFIG,
             icon="mdi:power-settings",
             translation_key="power_memory",
-            meta={
-                "power_memory": True,
-                "options": list(C.POWER_MEMORY_MODES.values()),
-                "color": dict(light.meta.get("color") or {}),
-            },
+            meta={**meta, "options": list(C.POWER_MEMORY_MODES.values())},
         )
     )
+    ctx.defs.append(
+        EntityDef(
+            Platform.BUTTON,
+            "power_memory_save",
+            dict(dps),
+            name="Save current state as power-on state",
+            entity_category=EntityCategory.CONFIG,
+            icon="mdi:content-save-cog",
+            translation_key="power_memory_save",
+            meta=dict(meta),
+        )
+    )
+    disturb = ctx.spec("do_not_disturb", type=DpType.BOOLEAN)
+    if disturb is not None and not disturb.read_only:
+        ctx.add(
+            EntityDef(
+                Platform.SWITCH,
+                "do_not_disturb",
+                {"switch": disturb.dp_id},
+                name="Stay off after a power cut",
+                entity_category=EntityCategory.CONFIG,
+                icon="mdi:power-plug-off",
+                translation_key="light_do_not_disturb",
+            )
+        )
 
 
 # ---------------------------------------------------------------------- covers

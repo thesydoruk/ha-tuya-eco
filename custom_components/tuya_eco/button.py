@@ -8,6 +8,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import power_on
 from .entity import EcoEntity
 from .hub import EcoHub
 from .local.device import EcoDevice
@@ -21,7 +22,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class EcoButton(EcoEntity, ButtonEntity):
-    """Pressing writes True (or ``press_value`` from meta)."""
+    """Pressing writes True (or ``press_value`` from meta); a power-memory button stores the light state."""
 
     def __init__(self, hub: EcoHub, device: EcoDevice, definition: EntityDef) -> None:
         """Initialise."""
@@ -31,4 +32,8 @@ class EcoButton(EcoEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Press."""
+        if self.definition.meta.get("power_memory"):
+            # Store the light's current state as its custom power-on state.
+            await self.async_write("value", power_on.snapshot(self).encode())
+            return
         await self.async_write("press", self.definition.meta.get("press_value", True))

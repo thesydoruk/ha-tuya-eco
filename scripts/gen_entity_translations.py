@@ -89,8 +89,10 @@ def build_en() -> dict[str, dict[str, dict]]:
     # keys used by profiles/*.yaml and composite builders
     put("button", "reset", "Reset")
     put("button", "force_reset", "Force reset")
+    put("button", "power_memory_save", "Save current state as power-on state")
+    put("switch", "light_do_not_disturb", "Stay off after a power cut")
     put("switch", "rf_remote_control", "RF remote control")
-    put("select", "scene", "Scene", {k: LIGHT_SCENE_NAMES[k] for k in C.LIGHT_SCENES_V1})
+    put("select", "scene", "Scene", {k: LIGHT_SCENE_NAMES[k] for k in C.LIGHT_SCENES})
     put(
         "select",
         "power_memory",
